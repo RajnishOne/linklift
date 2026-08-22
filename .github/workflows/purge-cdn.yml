@@ -1,0 +1,30 @@
+name: Purge jsDelivr CDN Cache
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'remote_config.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  purge-cache:
+    name: Purge jsDelivr Edge Cache
+    runs-on: ubuntu-latest
+    steps:
+      - name: Purge jsDelivr Cache for remote_config.json
+        run: |
+          echo "Purging jsDelivr CDN cache for ${{ github.repository }}@main/remote_config.json..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/remote_config.json")
+          echo "$RESPONSE"
+          
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            echo "✅ Successfully purged jsDelivr CDN cache."
+          else
+            echo "⚠️ Purge request returned status $STATUS"
+          fi
