@@ -75,21 +75,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 downloadLocation = defaultDownloadLocation(),
             ),
             downloadServiceAvailable = downloadManager != null,
-            isYouTubeAvailable = RemoteConfigHelper.isYouTubeAvailable,
-            isSoundCloudAvailable = RemoteConfigHelper.isSoundCloudAvailable,
-            isImgurAvailable = RemoteConfigHelper.isImgurAvailable,
         )
     )
     val uiState: StateFlow<LinkLiftUiState> = _uiState.asStateFlow()
 
     init {
-        updateRemoteConfigFlags()
-        viewModelScope.launch(Dispatchers.IO) {
-            RemoteConfigHelper.fetchConfig(okHttpClient) {
-                updateRemoteConfigFlags()
-            }
-        }
-
         observePreferences()
 
         MergeJobStore.ensureLoaded(appContext)
@@ -123,7 +113,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                             mergeJobs = jobs.values.toList(),
                             previous = current.downloads,
                         )
-                        val shouldPrompt = RemoteConfigHelper.isYouTubeAvailable && hasFailed403 && !hasCookies && !current.showYouTubeAuthPrompt
+                        val shouldPrompt = hasFailed403 && !hasCookies && !current.showYouTubeAuthPrompt
                         val next = if (merged == current.downloads) current else current.copy(downloads = merged)
                         if (shouldPrompt) {
                             next.copy(
@@ -272,17 +262,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             return true
         }
 
-        val disabledMessage = RemoteConfigHelper.getDisabledPlatformMessageForAny(urls)
-        if (disabledMessage != null) {
-            _uiState.update {
-                it.copy(
-                    currentScreen = AppScreen.Home,
-                    message = "Downloads from this source are not supported."
-                )
-            }
-            return true
-        }
-
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Home,
@@ -309,18 +288,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
 
     private fun analyzeInput(rawInput: String) {
         val urls = extractAllUrls(rawInput)
-
-        val disabledMessage = RemoteConfigHelper.getDisabledPlatformMessageForAny(urls)
-        if (disabledMessage != null) {
-            _uiState.update {
-                it.copy(
-                    currentScreen = AppScreen.Home,
-                    message = "Downloads from this source are not supported."
-                )
-
-            }
-            return
-        }
 
         when {
             urls.isEmpty() -> {
@@ -400,7 +367,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val isYt = isYouTubeUrl(rawUrl)
                 val hasCookies = CookieHelper.hasValidCookies(appContext)
                 val errMsg = error.message.orEmpty()
-                val needsYouTubeAuth = RemoteConfigHelper.isYouTubeAvailable && isYt && (!hasCookies || errMsg.contains("bot", ignoreCase = true) || errMsg.contains("Sign in", ignoreCase = true) || errMsg.contains("403") || errMsg.contains("cookies", ignoreCase = true))
+                val needsYouTubeAuth = isYt && (!hasCookies || errMsg.contains("bot", ignoreCase = true) || errMsg.contains("Sign in", ignoreCase = true) || errMsg.contains("403") || errMsg.contains("cookies", ignoreCase = true))
 
                 _uiState.update {
                     it.copy(
@@ -440,17 +407,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun analyzeLink(rawUrl: String) {
-        val disabledMessage = RemoteConfigHelper.getDisabledPlatformMessage(rawUrl)
-        if (disabledMessage != null) {
-            _uiState.update {
-                it.copy(
-                    currentScreen = AppScreen.Home,
-                    message = "Downloads from this source are not supported."
-                )
-            }
-            return
-        }
-
         analysisJob?.cancel()
         analysisJob = viewModelScope.launch(Dispatchers.IO) {
             val startedAt = SystemClock.elapsedRealtime()
@@ -497,7 +453,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val isYt = isYouTubeUrl(rawUrl)
                 val hasCookies = CookieHelper.hasValidCookies(appContext)
                 val errMsg = error.message.orEmpty()
-                val needsYouTubeAuth = RemoteConfigHelper.isYouTubeAvailable && isYt && (!hasCookies || errMsg.contains("bot", ignoreCase = true) || errMsg.contains("Sign in", ignoreCase = true) || errMsg.contains("403") || errMsg.contains("cookies", ignoreCase = true) || errMsg.contains("reloaded", ignoreCase = true))
+                val needsYouTubeAuth = isYt && (!hasCookies || errMsg.contains("bot", ignoreCase = true) || errMsg.contains("Sign in", ignoreCase = true) || errMsg.contains("403") || errMsg.contains("cookies", ignoreCase = true) || errMsg.contains("reloaded", ignoreCase = true))
 
                 _uiState.update {
                     it.copy(
@@ -2823,7 +2779,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun promptYouTubeAuth(reason: String? = null) {
-        if (!RemoteConfigHelper.isYouTubeAvailable) return
         _uiState.update {
             it.copy(
                 showYouTubeAuthPrompt = true,
@@ -2837,18 +2792,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             it.copy(
                 showYouTubeAuthPrompt = false,
                 youTubeAuthPromptReason = null,
-            )
-        }
-    }
-
-    private fun updateRemoteConfigFlags() {
-        _uiState.update { current ->
-            current.copy(
-                isYouTubeAvailable = RemoteConfigHelper.isYouTubeAvailable,
-                isSoundCloudAvailable = RemoteConfigHelper.isSoundCloudAvailable,
-                isImgurAvailable = RemoteConfigHelper.isImgurAvailable,
-                showYouTubeAuthPrompt = if (!RemoteConfigHelper.isYouTubeAvailable) false else current.showYouTubeAuthPrompt,
-                youTubeAuthPromptReason = if (!RemoteConfigHelper.isYouTubeAvailable) null else current.youTubeAuthPromptReason,
             )
         }
     }

@@ -105,10 +105,7 @@ internal fun HomeScreen(
         }
 
         item {
-            val items = rememberSupportLinkItems(
-                isSoundCloudAvailable = uiState.isSoundCloudAvailable,
-                isImgurAvailable = uiState.isImgurAvailable
-            )
+            val items = rememberSupportLinkItems()
             SupportLinksGrid(items = items)
         }
     }
@@ -228,26 +225,19 @@ private data class SupportLinkItem(
 )
 
 @Composable
-private fun rememberSupportLinkItems(
-    isSoundCloudAvailable: Boolean,
-    isImgurAvailable: Boolean,
-): List<SupportLinkItem> {
-    return remember(isSoundCloudAvailable, isImgurAvailable) {
-        buildList {
-            add(SupportLinkItem("Direct files", "MP4, WebM, MP3, JPG", Icons.Rounded.PlayCircleOutline))
-            add(SupportLinkItem("Instagram", "Public posts and reels only", Icons.Rounded.PlayCircleOutline))
-            add(SupportLinkItem("TikTok & Video links", "Public video posts", Icons.Rounded.Bolt))
-            add(SupportLinkItem("X, Facebook & Vimeo", "Public posts and videos", Icons.Rounded.GraphicEq))
-            add(SupportLinkItem("Pinterest & Reddit", "Public posts", Icons.Rounded.Image))
-            add(SupportLinkItem("Twitch & Streamable", "Clips, VODs and hosted video", Icons.Rounded.LiveTv))
-            if (isSoundCloudAvailable) {
-                add(SupportLinkItem("SoundCloud", "Tracks and audio playlists", Icons.Rounded.MusicNote))
-            }
-            if (isImgurAvailable) {
-                add(SupportLinkItem("Imgur", "Public images and albums", Icons.Rounded.Image))
-            }
-            add(SupportLinkItem("Dailymotion & Rumble", "Public video links", Icons.Rounded.VideoLibrary))
-        }
+private fun rememberSupportLinkItems(): List<SupportLinkItem> {
+    return remember {
+        listOf(
+            SupportLinkItem("Direct files", "MP4, WebM, MP3, JPG", Icons.Rounded.PlayCircleOutline),
+            SupportLinkItem("Instagram", "Public posts and reels only", Icons.Rounded.PlayCircleOutline),
+            SupportLinkItem("TikTok & Video links", "Public video posts", Icons.Rounded.Bolt),
+            SupportLinkItem("X, Facebook & Vimeo", "Public posts and videos", Icons.Rounded.GraphicEq),
+            SupportLinkItem("Pinterest & Reddit", "Public posts", Icons.Rounded.Image),
+            SupportLinkItem("Twitch & Streamable", "Clips, VODs and hosted video", Icons.Rounded.LiveTv),
+            SupportLinkItem("SoundCloud", "Tracks and audio playlists", Icons.Rounded.MusicNote),
+            SupportLinkItem("Imgur", "Public images and albums", Icons.Rounded.Image),
+            SupportLinkItem("Dailymotion & Rumble", "Public video links", Icons.Rounded.VideoLibrary),
+        )
     }
 }
 

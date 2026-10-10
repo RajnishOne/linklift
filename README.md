@@ -60,7 +60,7 @@ Powered by an embedded **Python 3.13** runtime via Chaquopy, LinkLift leverages 
 LinkLift
  ├── app/src/main/java/com/rjnsdev/linklift/app/
  │    ├── ui/               # Jetpack Compose UI (HomeScreen, PreviewScreen, DownloadsScreen, BatchScreen)
- │    ├── util/             # URL parsers, Formatters, RemoteConfigHelper
+ │    ├── util/             # URL parsers, Formatters, CookieHelper
  │    ├── LinkLiftViewModel # StateFlow-driven architecture and download orchestration
  │    └── MergeDownloadService # Foreground service for downloading & muxing dual-stream media
  └── app/src/main/python/
@@ -142,22 +142,6 @@ The output APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`.
 # or run the helper script:
 ./scripts/run-android.sh
 ```
-
----
-
-## ⚙️ Remote Configuration
-
-Platform availability toggles (such as YouTube, SoundCloud, and Imgur download availability) are managed via the open [remote_config.json](remote_config.json) file hosted in this repository:
-
-```json
-{
-  "is_youtube_available": true,
-  "is_soundcloud_available": true,
-  "is_imgur_available": true
-}
-```
-
-The app queries `raw.githubusercontent.com` and jsDelivr CDN on startup with resilient offline fallbacks.
 
 ---
 
