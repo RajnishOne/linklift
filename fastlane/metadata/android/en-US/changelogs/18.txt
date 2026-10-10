@@ -1,0 +1,5 @@
+- Completely removed remote feature flags and launch-time network calls for a zero-telemetry, fully offline startup experience
+- Focused app core exclusively on YouTube and Instagram for faster, reliable extraction
+- Fixed downloaded file naming to preserve media titles instead of CDN hashes and paths
+- Deferred notification permission prompt until the first download begins
+- Cleaned up build workflows and metadata for F-Droid packaging
