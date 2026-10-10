@@ -22,9 +22,9 @@
 
 ## 🌟 Overview
 
-**LinkLift** is a native, modern Android video and audio downloader built with **Jetpack Compose** and **Material 3**. It functions as an all-in-one **YouTube downloader**, **Instagram downloader**, and multi-platform media extractor, letting you analyze, stream-preview, and download high-resolution videos, audio tracks, and images directly to your device.
+**LinkLift** is a native, modern Android media downloader built with **Jetpack Compose** and **Material 3**, purpose-built for **YouTube** and **Instagram**. It allows you to analyze, stream-preview, and download high-resolution videos, audio tracks, reels, and multi-slide carousels directly to your device.
 
-Powered by an embedded **Python 3.13** runtime via Chaquopy, LinkLift leverages the latest `yt-dlp` and `instaloader` extraction engines combined with an on-device native `MediaMuxer` pipeline for combining separate 1080p/4K video and high-bitrate audio streams into standard MP4/WebM files with zero quality loss.
+Powered by an embedded **Python 3.13** runtime via Chaquopy, LinkLift leverages `yt-dlp` and `instaloader` extraction engines combined with an on-device native `MediaMuxer` pipeline for combining separate 1080p/4K video and high-bitrate audio streams into standard MP4/WebM files with zero quality loss.
 
 ---
 
@@ -32,14 +32,8 @@ Powered by an embedded **Python 3.13** runtime via Chaquopy, LinkLift leverages 
 
 | Platform | Supported Media Types | Key Features |
 | :--- | :--- | :--- |
-| **YouTube** | Videos (up to 4K/60fps), Shorts, Playlists, Channels, Audio-only (M4A/MP3/Opus) | Native dual-stream muxing, playlist batch expansion |
-| **Instagram** | Reels, Posts, Stories, Carousels, Profile photos | Multi-slide carousel viewer, direct HD MP4 extraction |
-| **TikTok** | HD Videos, Slideshows, Audio tracks | Clean downloads without watermark |
-| **X / Twitter** | Videos, GIFs, High-res images | Multi-bitrate quality selector |
-| **Reddit** | Videos with audio (v.redd.it), Galleries | Automatic DASH/HLS audio-video merging |
-| **Pinterest** | HD Videos, Pins, Images | Full resolution image & video downloads |
-| **SoundCloud** | Tracks, Sets, Albums | High-bitrate audio extraction with metadata |
-| **1,000+ Sites** | Any website supported by `yt-dlp` (Vimeo, Dailymotion, Facebook, Twitch, etc.) | Direct stream extraction, custom format selector |
+| **YouTube** | Videos (up to 4K/60fps), Shorts, Playlists, Channels, Audio-only (M4A/MP3/Opus) | Native dual-stream muxing, playlist batch expansion, cookie authentication |
+| **Instagram** | Reels, Posts, Carousels, Profile photos | Multi-slide carousel viewer, direct HD MP4 video & JPEG extraction |
 
 ---
 
