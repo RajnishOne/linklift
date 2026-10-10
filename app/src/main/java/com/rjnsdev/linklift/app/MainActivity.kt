@@ -46,9 +46,6 @@ class MainActivity : ComponentActivity() {
                 ensureNotificationPermission = ::requestPostNotificationsIfNeeded,
             )
         }
-        // Ask on launch so download progress / completion notifications work without
-        // waiting until the first Download tap (Android 13+).
-        window.decorView.post { requestPostNotificationsIfNeeded() }
         handleIncomingShareIntent(intent)
     }
 

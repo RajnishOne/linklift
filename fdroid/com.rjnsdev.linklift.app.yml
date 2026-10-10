@@ -1,5 +1,7 @@
 Categories:
   - Multimedia
+AntiFeatures:
+  - NonFreeNet
 License: MIT
 AuthorName: Rajnish Sharma
 SourceCode: https://github.com/RajnishOne/linklift
