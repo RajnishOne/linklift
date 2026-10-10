@@ -1,7 +1,8 @@
-Categories:
-  - Multimedia
 AntiFeatures:
   - NonFreeNet
+Categories:
+  - Download
+  - Multimedia
 License: MIT
 AuthorName: Rajnish Sharma
 SourceCode: https://github.com/RajnishOne/linklift
@@ -14,14 +15,15 @@ RepoType: git
 Repo: https://github.com/RajnishOne/linklift.git
 
 Builds:
-  - versionName: '2.7'
-    versionCode: 17
-    commit: f76d16c3a356b99727617111a08ef3c05bbf90e7
+  - versionName: '2.8'
+    versionCode: 18
+    commit: 097d0030da0485a193f45aef2c52ff0cc0eba21e
     subdir: app
     gradle:
       - yes
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '2.7'
-CurrentVersionCode: 17
+CurrentVersion: '2.8'
+CurrentVersionCode: 18
+
