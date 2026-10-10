@@ -10,33 +10,12 @@ import java.util.regex.Pattern
 private val YT_DLP_EXACT_HOSTS = setOf(
     "youtu.be",
     "instagr.am",
-    "fb.watch",
-    "redd.it",
-    "pin.it",
-    "dai.ly",
-    "x.com",
-    "drive.google.com",
 )
 
 private val YT_DLP_HOST_MARKERS = listOf(
     "youtube.com",
     "youtube-nocookie.com",
     "instagram.com",
-    "tiktok.com",
-    "twitter.com",
-    "facebook.com",
-    "vimeo.com",
-    "reddit.com",
-    "pinterest.",
-    "twitch.tv",
-    "streamable.com",
-    "imgur.com",
-    "soundcloud.com",
-    "dailymotion.com",
-    "rumble.com",
-    "xhamster.com",
-    "xhamster2.com",
-    "pornhub.com",
 )
 
 private val FALLBACK_URL_PATTERN = Pattern.compile(
@@ -126,62 +105,34 @@ internal fun looksLikePlaylistUrl(rawUrl: String): Boolean {
                 (!listParam.isNullOrBlank() && (path.startsWith("/playlist") || path.startsWith("/watch") && listParam.startsWith("PL")))
         }
         host == "youtu.be" -> !listParam.isNullOrBlank()
-        host.endsWith("tiktok.com") -> {
-            (path.startsWith("/@") && !path.contains("/video/") && !path.contains("/photo/")) ||
-                path.endsWith("/foryou") ||
-                path.endsWith("/trending")
-        }
-        host == "x.com" || host.endsWith("twitter.com") -> {
-            val segments = path.trim('/').split('/').filter { it.isNotBlank() }
-            segments.size == 1 && segments[0] !in setOf(
-                "i", "home", "explore", "search", "settings", "notifications", "messages",
-            )
-        }
-        host.contains("vimeo.com") -> path.startsWith("/channels/") || path.startsWith("/showcase/")
-        host.contains("soundcloud.com") -> path.contains("/sets/")
-        host.contains("twitch.tv") -> path.endsWith("/videos")
-        host.contains("imgur.com") -> path.startsWith("/a/") || path.startsWith("/gallery/")
-        host == "drive.google.com" -> path.contains("/folders/")
-        host.contains("dailymotion.com") -> path.startsWith("/playlist/")
-        host.contains("rumble.com") -> path.contains("/playlists/")
         else -> false
     }
 }
 
 internal fun shouldRefreshUrlBeforeDownload(url: String): Boolean {
-    val host = getUriHost(url).lowercase(Locale.ROOT)
-    return host.contains("xhamster") ||
-           host.contains("pornhub.com") ||
-           host.contains("tiktok.com") ||
-           host.contains("facebook.com") ||
-           host.contains("fb.watch") ||
-           host.contains("instagram.com") ||
-           host.contains("instagr.am")
+    return isInstagramUrl(url)
 }
 
 internal fun shouldDownloadWithMergeService(format: MediaFormat, sourceUrl: String): Boolean {
     if (format.requiresMerge) return true
     if (isYouTubeUrl(sourceUrl) || format.mediaUrl.contains("googlevideo.com")) return true
     val host = getUriHost(sourceUrl).lowercase(Locale.ROOT)
-    return host.contains("youtube.com") || host == "youtu.be" || host.contains("youtu.be") ||
-           host.contains("tiktok.com") || host == "vt.tiktok.com" ||
-           host.contains("facebook.com") || host == "fb.watch" ||
-           host.contains("xhamster.com") || host.contains("xhamster2.com") ||
-           host.contains("pornhub.com")
+    return host.contains("youtube.com") || host == "youtu.be" || host.contains("youtu.be")
 }
 
 internal fun isYouTubeUrl(url: String): Boolean {
-    val host = getUriHost(url).lowercase(Locale.ROOT)
-    return host.contains("youtube.com") || host.endsWith("youtube.com") ||
-           host.contains("youtube-nocookie.com") || host == "youtu.be" || host.contains("youtu.be")
+    val host = getUriHost(url).lowercase(Locale.ROOT).removePrefix("www.")
+    return host == "youtube.com" || host.endsWith(".youtube.com") ||
+           host == "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com") ||
+           host == "youtu.be" || host.endsWith(".youtu.be")
 }
 
-internal fun isSoundCloudUrl(url: String): Boolean {
-    val host = getUriHost(url).lowercase(Locale.ROOT)
-    return host.contains("soundcloud.com") || host.endsWith("soundcloud.com")
+internal fun isInstagramUrl(url: String): Boolean {
+    val host = getUriHost(url).lowercase(Locale.ROOT).removePrefix("www.")
+    return host == "instagram.com" || host.endsWith(".instagram.com") ||
+           host == "instagr.am" || host.endsWith(".instagr.am")
 }
 
-internal fun isImgurUrl(url: String): Boolean {
-    val host = getUriHost(url).lowercase(Locale.ROOT)
-    return host.contains("imgur.com") || host.endsWith("imgur.com")
+internal fun isSupportedMediaUrl(url: String): Boolean {
+    return isYouTubeUrl(url) || isInstagramUrl(url)
 }
