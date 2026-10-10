@@ -76,12 +76,12 @@ internal fun HomeScreen(
                         tint = LinkLiftSuccess,
                     )
                     Text(
-                        text = "Seamless media downloads",
+                        text = "YouTube & Instagram Downloader",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                     )
                     Text(
-                        text = "Paste a direct file or public post link to download media.",
+                        text = "Paste a YouTube or Instagram link to download media.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = LinkLiftTextSecondary,
                     )
@@ -99,8 +99,8 @@ internal fun HomeScreen(
 
         item {
             SectionHeader(
-                title = "Supported links",
-                action = "Popular apps",
+                title = "Supported platforms",
+                action = "YouTube & Instagram",
             )
         }
 
@@ -228,15 +228,8 @@ private data class SupportLinkItem(
 private fun rememberSupportLinkItems(): List<SupportLinkItem> {
     return remember {
         listOf(
-            SupportLinkItem("Direct files", "MP4, WebM, MP3, JPG", Icons.Rounded.PlayCircleOutline),
-            SupportLinkItem("Instagram", "Public posts and reels only", Icons.Rounded.PlayCircleOutline),
-            SupportLinkItem("TikTok & Video links", "Public video posts", Icons.Rounded.Bolt),
-            SupportLinkItem("X, Facebook & Vimeo", "Public posts and videos", Icons.Rounded.GraphicEq),
-            SupportLinkItem("Pinterest & Reddit", "Public posts", Icons.Rounded.Image),
-            SupportLinkItem("Twitch & Streamable", "Clips, VODs and hosted video", Icons.Rounded.LiveTv),
-            SupportLinkItem("SoundCloud", "Tracks and audio playlists", Icons.Rounded.MusicNote),
-            SupportLinkItem("Imgur", "Public images and albums", Icons.Rounded.Image),
-            SupportLinkItem("Dailymotion & Rumble", "Public video links", Icons.Rounded.VideoLibrary),
+            SupportLinkItem("YouTube", "Videos, Shorts, Playlists & Audio", Icons.Rounded.PlayCircleOutline),
+            SupportLinkItem("Instagram", "Reels, Posts & Multi-slide Carousels", Icons.Rounded.PlayCircleOutline),
         )
     }
 }
