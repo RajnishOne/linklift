@@ -287,12 +287,21 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun analyzeInput(rawInput: String) {
-        val urls = extractAllUrls(rawInput)
+        val allUrls = extractAllUrls(rawInput)
+        val urls = allUrls.filter { isSupportedMediaUrl(it) }
 
         when {
-            urls.isEmpty() -> {
+            allUrls.isEmpty() -> {
                 _uiState.update {
                     it.copy(message = "No valid links found in what you pasted.")
+                }
+            }
+            urls.isEmpty() -> {
+                _uiState.update {
+                    it.copy(
+                        currentScreen = AppScreen.Home,
+                        message = "Only YouTube and Instagram links are supported."
+                    )
                 }
             }
             urls.size > 1 -> {
@@ -407,6 +416,16 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun analyzeLink(rawUrl: String) {
+        if (!isSupportedMediaUrl(rawUrl)) {
+            _uiState.update {
+                it.copy(
+                    currentScreen = AppScreen.Home,
+                    message = "Only YouTube and Instagram links are supported."
+                )
+            }
+            return
+        }
+
         analysisJob?.cancel()
         analysisJob = viewModelScope.launch(Dispatchers.IO) {
             val startedAt = SystemClock.elapsedRealtime()
@@ -2469,20 +2488,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val normalized = platform.orEmpty().trim()
         if (normalized.isBlank()) return "Link"
         return when {
-            normalized.contains("youtube", ignoreCase = true) -> "Video Link"
-            normalized.equals("tiktok", ignoreCase = true) -> "TikTok"
-            normalized.equals("twitter", ignoreCase = true) || normalized.equals("x", ignoreCase = true) -> "X"
-            normalized.equals("facebook", ignoreCase = true) -> "Facebook"
-            normalized.equals("vimeo", ignoreCase = true) -> "Vimeo"
-            normalized.equals("reddit", ignoreCase = true) -> "Reddit"
-            normalized.equals("pinterest", ignoreCase = true) -> "Pinterest"
-            normalized.contains("twitch", ignoreCase = true) -> "Twitch"
-            normalized.contains("streamable", ignoreCase = true) -> "Streamable"
-            normalized.contains("imgur", ignoreCase = true) -> "Imgur"
-            normalized.contains("soundcloud", ignoreCase = true) -> "SoundCloud"
-            normalized.contains("dailymotion", ignoreCase = true) -> "Dailymotion"
-            normalized.contains("rumble", ignoreCase = true) -> "Rumble"
-            normalized.contains("googledrive", ignoreCase = true) -> "Google Drive"
+            normalized.contains("youtube", ignoreCase = true) -> "YouTube"
+            normalized.contains("instagram", ignoreCase = true) -> "Instagram"
             else -> normalized.replaceFirstChar { char ->
                 if (char.isLowerCase()) char.titlecase(Locale.ROOT) else char.toString()
             }
