@@ -632,10 +632,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         } else {
             "video/mp4"
         }
-        val baseName = item.fileName.substringBeforeLast('.', item.fileName)
-        val sanitizedBase = baseName.replace(Regex("""[\\/:*?"<>|]"""), "_")
-        val resolutionTag = format.height?.let { "_${it}p" } ?: ""
-        val outputFileName = "${sanitizedBase}${resolutionTag}.$outputExt"
+        val rawTitle = item.title.ifBlank { item.fileName.substringBeforeLast('.', item.fileName) }
+        val outputFileName = buildSafeFileName(
+            title = rawTitle,
+            ext = outputExt,
+            fallbackUrl = item.resolvedUrl,
+            mimeType = outputMime,
+        )
         val jobId = "merge-${System.currentTimeMillis()}-${(0..9999).random()}"
 
         MergeDownloadService.enqueue(
@@ -1075,8 +1078,15 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             ?: item.formats.firstOrNull()
             ?: return item
 
-        val baseFileName = item.fileName.substringBeforeLast(".", item.fileName)
-        val newFileName = "$baseFileName.${selected.ext}"
+        val baseFileName = item.fileName.substringBeforeLast(".", item.fileName).ifBlank {
+            item.title
+        }
+        val newFileName = buildSafeFileName(
+            title = baseFileName,
+            ext = selected.ext,
+            fallbackUrl = selected.mediaUrl,
+            mimeType = selected.mimeType,
+        )
         return item.copy(
             resolvedUrl = selected.mediaUrl,
             mimeType = selected.mimeType,
@@ -1621,15 +1631,16 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val resolution = primary.width?.let { width ->
             primary.height?.let { height -> "${width}x$height" }
         } ?: primary.height?.let { "${it}p" }
-        val baseFileName = bestFileName(previewFormat.mediaUrl, previewFormat.mimeType)
-        val fileName = if (baseFileName.endsWith(".${previewFormat.ext}", ignoreCase = true)) {
-            baseFileName
-        } else {
-            "${baseFileName.substringBeforeLast(".", baseFileName)}.${previewFormat.ext}"
-        }
+        val sanitizedTitle = sanitizedPageTitle(title) ?: title
+        val fileName = buildSafeFileName(
+            title = sanitizedTitle,
+            ext = previewFormat.ext,
+            fallbackUrl = previewFormat.mediaUrl,
+            mimeType = previewFormat.mimeType,
+        )
         return PreviewMediaItem(
             resolvedUrl = previewFormat.mediaUrl,
-            title = sanitizedPageTitle(title) ?: title,
+            title = sanitizedTitle,
             description = description,
             mimeType = previewFormat.mimeType,
             kind = previewFormat.kind,
@@ -1824,12 +1835,20 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val kind = explicitKind.takeIf { it != MediaKind.Unknown }
             ?: MediaKind.fromMimeType(mimeType, resolvedUrl)
         val metadata = extractRemoteMetadata(resolvedUrl, kind)
-        val fileName = bestFileName(resolvedUrl, mimeType)
-        val fallbackTitle = fileName.substringBeforeLast(".")
-            .replace('-', ' ')
-            .replace('_', ' ')
-            .trim()
-            .ifBlank { "Media download" }
+        val candidateTitle = firstNonBlank(titleHint, metadata.title)
+        val finalTitle = sanitizedPageTitle(candidateTitle) ?: candidateTitle ?: "Media download"
+        val ext = when (kind) {
+            MediaKind.Video -> "mp4"
+            MediaKind.Audio -> "m4a"
+            MediaKind.Image -> "jpg"
+            else -> "mp4"
+        }
+        val fileName = buildSafeFileName(
+            title = finalTitle,
+            ext = ext,
+            fallbackUrl = resolvedUrl,
+            mimeType = mimeType,
+        )
         val description = descriptionHint ?: when (kind) {
             MediaKind.Video -> if (isDirectLink) {
                 "Ready to download this direct video file"
@@ -1851,7 +1870,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
 
         return PreviewMediaItem(
             resolvedUrl = resolvedUrl,
-            title = sanitizedPageTitle(firstNonBlank(titleHint, metadata.title, fallbackTitle)) ?: "Media download",
+            title = finalTitle,
             description = description,
             mimeType = mimeType,
             kind = kind,
@@ -2710,18 +2729,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun bestFileName(url: String, mimeType: String): String {
-        val guessed = URLUtil.guessFileName(url, null, mimeType)
-        if (guessed.isNotBlank()) return guessed
-        val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType).orEmpty()
-        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        return buildString {
-            append("linklift_")
-            append(timestamp)
-            if (extension.isNotBlank()) {
-                append(".")
-                append(extension)
-            }
-        }
+        return buildSafeFileName(null, null, fallbackUrl = url, mimeType = mimeType)
     }
 
     private fun defaultDownloadLocation(): String = "Downloads/LinkLift"

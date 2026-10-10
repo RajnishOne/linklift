@@ -147,4 +147,45 @@ class MediaFormatMergeTest {
         assertEquals(QualityPreset.BestQuality, QualityPreset.fromStorageKey(null))
         assertEquals(QualityPreset.BestQuality, QualityPreset.fromStorageKey("unknown_preset_key"))
     }
+
+    @Test
+    fun testBuildSafeFileNameFromTitles() {
+        // YouTube video title with special characters
+        val ytTitle = "Rick Astley - Never Gonna Give You Up (Official Video) [4K / 60fps]?"
+        val ytFileName = buildSafeFileName(
+            title = ytTitle,
+            ext = "mp4",
+            fallbackUrl = "https://rr1---sn-abc.googlevideo.com/videoplayback?id=123",
+            mimeType = "video/mp4"
+        )
+        assertEquals("Rick Astley - Never Gonna Give You Up (Official Video) [4K _ 60fps].mp4", ytFileName)
+
+        // Instagram reel title / caption
+        val igTitle = "Amazing Sunset in Bali! \uD83C\uDF05"
+        val igFileName = buildSafeFileName(
+            title = igTitle,
+            ext = "mp4",
+            fallbackUrl = "https://scontent.cdninstagram.com/v/t51/AQP2WUmTpYLQ12345.mp4?_nc_cat=100",
+            mimeType = "video/mp4"
+        )
+        assertTrue(igFileName.startsWith("Amazing Sunset in Bali!"))
+        assertTrue(igFileName.endsWith(".mp4"))
+        assertFalse(igFileName.contains("AQP2WUmTpYLQ"))
+
+        // Multi-item / carousel naming
+        val carouselItem1 = multiItemFileName("Amazing Sunset in Bali.jpg", 0)
+        val carouselItem2 = multiItemFileName("Amazing Sunset in Bali.jpg", 1)
+        assertEquals("Amazing Sunset in Bali_1.jpg", carouselItem1)
+        assertEquals("Amazing Sunset in Bali_2.jpg", carouselItem2)
+
+        // Fallback when title is empty or generic
+        val fallbackFileName = buildSafeFileName(
+            title = "videoplayback",
+            ext = "mp4",
+            fallbackUrl = "https://example.com/custom_clip.mp4",
+            mimeType = "video/mp4"
+        )
+        assertEquals("custom_clip.mp4", fallbackFileName)
+    }
 }
+
