@@ -1,6 +1,7 @@
 AntiFeatures:
   NonFreeNet:
-    en-US: Relies on proprietary and non-free network services (YouTube and Instagram) to parse and download media.
+    en-US: Relies on proprietary and non-free network services (YouTube and Instagram)
+      to parse and download media.
 Categories:
   - Download
   - Multimedia
@@ -27,4 +28,3 @@ AutoUpdateMode: Version
 UpdateCheckMode: Tags
 CurrentVersion: '2.8'
 CurrentVersionCode: 18
-
