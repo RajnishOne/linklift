@@ -1,5 +1,6 @@
 AntiFeatures:
-  - NonFreeNet
+  NonFreeNet:
+    en-US: Relies on proprietary and non-free network services (YouTube and Instagram) to parse and download media.
 Categories:
   - Download
   - Multimedia
