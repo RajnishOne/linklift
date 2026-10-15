@@ -100,7 +100,6 @@ internal fun HomeScreen(
         item {
             SectionHeader(
                 title = "Supported platforms",
-                action = "YouTube & Instagram",
             )
         }
 

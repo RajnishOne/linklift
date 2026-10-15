@@ -73,7 +73,7 @@ internal fun NeonCard(
 @Composable
 internal fun TitleActionRow(
     title: String,
-    action: String,
+    action: String? = null,
     titleStyle: TextStyle = MaterialTheme.typography.titleLarge,
     actionStyle: TextStyle = MaterialTheme.typography.labelLarge,
     titleColor: Color = Color.White,
@@ -85,7 +85,9 @@ internal fun TitleActionRow(
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(text = title, style = titleStyle, color = titleColor)
-            Text(text = action, style = actionStyle, color = actionColor)
+            if (!action.isNullOrBlank()) {
+                Text(text = action, style = actionStyle, color = actionColor)
+            }
         }
     } else {
         Row(
@@ -99,18 +101,20 @@ internal fun TitleActionRow(
                 style = titleStyle,
                 color = titleColor,
             )
-            Text(
-                text = action,
-                modifier = Modifier.widthIn(max = 160.dp),
-                style = actionStyle,
-                color = actionColor,
-            )
+            if (!action.isNullOrBlank()) {
+                Text(
+                    text = action,
+                    modifier = Modifier.widthIn(max = 160.dp),
+                    style = actionStyle,
+                    color = actionColor,
+                )
+            }
         }
     }
 }
 
 @Composable
-internal fun SectionHeader(title: String, action: String) {
+internal fun SectionHeader(title: String, action: String? = null) {
     TitleActionRow(title = title, action = action)
 }
 
