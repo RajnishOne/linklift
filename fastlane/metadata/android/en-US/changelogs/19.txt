@@ -1,0 +1,5 @@
+- Fresh YouTube-inspired UI theme featuring vibrant red accents and sleek, distraction-free dark surfaces
+- Streamlined dashboard interface with cleaner platform section headers
+- Brand new 512x512 launcher app icon and F-Droid cover feature graphic banner
+- Added support for project funding and donations via GitHub Sponsors and Ko-fi
+- General performance improvements and UI polish

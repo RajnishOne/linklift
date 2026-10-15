@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag name (e.g. v2.7)'
         required: true
-        default: 'v2.7'
+        default: 'v2.9'
 
 permissions:
   contents: write
