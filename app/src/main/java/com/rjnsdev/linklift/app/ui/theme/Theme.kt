@@ -25,9 +25,9 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = LinkLiftAccent,
-    onPrimary = LinkLiftTextPrimary,
+    onPrimary = androidx.compose.ui.graphics.Color.White,
     secondary = LinkLiftBlue,
-    onSecondary = LinkLiftTextPrimary,
+    onSecondary = androidx.compose.ui.graphics.Color.White,
     tertiary = LinkLiftCyan,
     background = LinkLiftLightBackground,
     onBackground = LinkLiftLightTextPrimary,
@@ -37,7 +37,7 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = LinkLiftLightTextSecondary,
     outline = LinkLiftLightOutline,
     error = LinkLiftError,
-    onError = LinkLiftTextPrimary
+    onError = androidx.compose.ui.graphics.Color.White
 )
 
 @Composable

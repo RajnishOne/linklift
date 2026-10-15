@@ -46,7 +46,6 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTheme
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftBackground
-import com.rjnsdev.linklift.app.ui.theme.LinkLiftBlue
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
@@ -242,8 +241,8 @@ internal fun AppBackground(content: @Composable () -> Unit) {
                 Brush.verticalGradient(
                     colors = listOf(
                         LinkLiftBackground,
-                        Color(0xFF0B0E1A),
-                        Color(0xFF05060B),
+                        Color(0xFF141414),
+                        Color(0xFF0A0A0A),
                     )
                 )
             )
@@ -254,7 +253,7 @@ internal fun AppBackground(content: @Composable () -> Unit) {
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            LinkLiftAccent.copy(alpha = 0.18f),
+                            LinkLiftAccent.copy(alpha = 0.12f),
                             Color.Transparent,
                         ),
                         radius = 900f,
@@ -267,7 +266,7 @@ internal fun AppBackground(content: @Composable () -> Unit) {
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            LinkLiftBlue.copy(alpha = 0.1f),
+                            LinkLiftAccentBright.copy(alpha = 0.05f),
                             Color.Transparent,
                         ),
                         radius = 700f,
@@ -279,7 +278,7 @@ internal fun AppBackground(content: @Composable () -> Unit) {
     }
 }
 
-@androidx.compose.ui.tooling.preview.Preview(name = "Section header", showBackground = true, backgroundColor = 0xFF05060B)
+@androidx.compose.ui.tooling.preview.Preview(name = "Section header", showBackground = true, backgroundColor = 0xFF0F0F0F)
 @Composable
 private fun SectionHeaderPreview() {
     LinkLiftTheme(darkTheme = true) {
@@ -291,7 +290,7 @@ private fun SectionHeaderPreview() {
     name = "Section header — large font",
     fontScale = 1.5f,
     showBackground = true,
-    backgroundColor = 0xFF05060B,
+    backgroundColor = 0xFF0F0F0F,
 )
 @Composable
 private fun SectionHeaderLargeFontPreview() {

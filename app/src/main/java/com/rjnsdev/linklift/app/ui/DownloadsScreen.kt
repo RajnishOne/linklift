@@ -66,7 +66,6 @@ import coil.compose.AsyncImage
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftBackground
-import com.rjnsdev.linklift.app.ui.theme.LinkLiftBlue
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftError
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftSuccess
@@ -563,7 +562,7 @@ private fun DownloadThumbnail(
                         colors = when (state) {
                             DownloadState.Completed -> listOf(LinkLiftSuccess.copy(alpha = 0.25f), LinkLiftAccent.copy(alpha = 0.18f))
                             DownloadState.Failed -> listOf(LinkLiftError.copy(alpha = 0.28f), LinkLiftCard)
-                            else -> listOf(LinkLiftAccent.copy(alpha = 0.25f), LinkLiftBlue.copy(alpha = 0.18f))
+                            else -> listOf(LinkLiftAccent.copy(alpha = 0.25f), LinkLiftAccentBright.copy(alpha = 0.18f))
                         }
                     )
                 ),
