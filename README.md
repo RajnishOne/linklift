@@ -15,6 +15,8 @@
   <a href="https://chaquo.com/chaquopy/"><img src="https://img.shields.io/badge/Python-3.13%20(Chaquopy)-3776AB?style=flat&logo=python&logoColor=white" alt="Python 3.13"></a>
   <a href="https://github.com/yt-dlp/yt-dlp"><img src="https://img.shields.io/badge/Powered%20by-yt--dlp%20%26%20Instaloader-FF0000?style=flat" alt="yt-dlp"></a>
   <a href="https://github.com/RajnishOne/linklift/releases"><img src="https://img.shields.io/badge/F--Droid%20%26%20FOSS-Ready-009688?style=flat&logo=f-droid&logoColor=white" alt="F-Droid Ready"></a>
+  <a href="https://ko-fi.com/rajnishone"><img src="https://img.shields.io/badge/Ko--fi-F16061?style=flat&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
+  <a href="https://github.com/sponsors/RajnishOne"><img src="https://img.shields.io/badge/Sponsor-EA4AAA?style=flat&logo=github&logoColor=white" alt="Sponsor"></a>
   <a href="https://github.com/RajnishOne/linklift/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs Welcome"></a>
 </p>
 
@@ -154,6 +156,17 @@ LinkLift is developed for **educational and personal archival purposes only**.
 - Please respect the copyright and intellectual property rights of content creators.
 - Do not download copyrighted media without appropriate permission from the content owner.
 - Users are responsible for complying with the Terms of Service of the respective platforms from which they extract media.
+
+---
+
+## 💖 Support & Donate
+
+If you find LinkLift useful and want to support ongoing development, consider buying a coffee or sponsoring the project:
+
+[![Ko-fi](https://img.shields.io/badge/Support_on-Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/rajnishone)
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor_on-GitHub-EA4AAA?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/RajnishOne)
+
+Every contribution helps keep the app tracker-free, open-source, and continually updated against upstream extraction changes.
 
 ---
 
