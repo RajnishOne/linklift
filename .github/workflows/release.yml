@@ -3,13 +3,13 @@ name: Release Build
 on:
   push:
     tags:
-      - 'v*'
+      - '*'
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag name (e.g. v2.7)'
+        description: 'Tag name (e.g. v2.10)'
         required: true
-        default: 'v2.9'
+        default: 'v2.10'
 
 permissions:
   contents: write
@@ -77,7 +77,7 @@ jobs:
           fi
 
           if [ -z "$TAG_NAME" ]; then
-            TAG_NAME="v2.7"
+            TAG_NAME="v2.10"
           fi
 
           # Ensure tag format starts with 'v' (e.g. 2.7 -> v2.7)
