@@ -1,0 +1,4 @@
+- Updated app metadata and descriptions with enhanced SEO focus on YouTube and Instagram video downloading
+- UI polish and component refinements across platform sections
+- Added comprehensive release guidelines and automation documentation
+- General stability improvements
