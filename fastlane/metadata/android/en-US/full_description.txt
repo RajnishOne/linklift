@@ -1,11 +1,32 @@
-LinkLift is a native Android application built with Jetpack Compose and Material 3 that lets you analyze, preview, and download high-resolution videos, audio tracks, and images from supported web links and social media platforms.
+LinkLift is a fast, lightweight, and private YouTube and Instagram video downloader for Android. Easily download YouTube videos, Shorts, Instagram Reels, posts, and audio in high-definition (HD, 1080p, 2K, 4K) directly to your device.
 
-Powered by an embedded Python runtime via Chaquopy, LinkLift leverages yt-dlp and Instaloader on-device combined with native MediaMuxer stream merging for combining separate high-definition video and audio streams seamlessly.
+Save your favorite content for offline viewing, extract MP3 audio from music and podcasts, and download Instagram Reels with crystal-clear quality — all with zero ads, zero trackers, and complete privacy.
 
 Key Features:
-- Platform Support: Extract media and audio from YouTube (videos, shorts, playlists) and Instagram (posts, reels, carousels).
-- Stream Merging (MediaMuxer): Downloads separate video and audio streams in a foreground service and multiplexes them locally into standard MP4/WebM files.
-- In-App Fullscreen Player: Built-in media player with gesture controls, playback speed controls, and video quality selection.
-- Batch & Playlist Downloads: Expand playlists and channels, preview individual entries, and queue bulk downloads.
-- System Share Sheet Integration: Share any media link directly from your browser or social media apps into LinkLift.
-- 100% Tracker-Free: Zero Google Play Services dependencies, zero analytics SDKs, and complete privacy.
+
+▶️ YouTube Video & Audio Downloader
+• Download YouTube videos in multiple resolutions: 720p, 1080p Full HD, 2K, and 4K
+• Fast YouTube Shorts downloader with instant preview
+• Convert & extract YouTube videos to high-quality audio (MP3, M4A)
+• Batch download full YouTube playlists and channels
+• Local video and audio stream merging via native MediaMuxer for seamless playback
+
+📸 Instagram Video & Reels Downloader
+• Download Instagram Reels, videos, photos, and multi-slide carousels
+• Save high-resolution Instagram media directly to your device gallery
+• Instant share: Send links directly from Instagram to LinkLift via the system share sheet
+
+🎬 Built-In Fullscreen Media Player
+• Play downloaded videos and audio files offline without leaving the app
+• Gesture controls for brightness, volume, and seeking
+• Playback speed controls (0.5x to 2x) and video quality selector
+
+🔒 100% Private, Ad-Free & Open Source
+• Zero ads, zero trackers, and zero telemetry
+• Powered by an on-device Python engine (yt-dlp and Instaloader via Chaquopy)
+• Completely offline processing with no cloud intermediaries or account required
+
+How to Use LinkLift:
+1. Tap "Share" on any YouTube video, Short, or Instagram Reel, and choose LinkLift (or copy and paste the link).
+2. Preview the media and pick your preferred video resolution or audio format.
+3. Tap Download to save it directly to your device!
