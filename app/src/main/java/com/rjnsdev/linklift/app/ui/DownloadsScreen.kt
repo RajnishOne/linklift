@@ -70,6 +70,8 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftError
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftSuccess
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRedBright
 
 @Composable
 internal fun DownloadsScreen(
@@ -265,6 +267,7 @@ private fun DownloadDetailCard(
                 selectionMode = selectionMode,
                 selected = selected,
                 isActive = isActive,
+                sourceUrl = download.sourceUrl,
                 onSelectionChanged = onSelectionChanged,
                 onCancel = onCancel,
             )
@@ -291,8 +294,8 @@ private fun DownloadDetailCard(
                             .fillMaxWidth()
                             .clickable { onPromptYouTubeAuth() },
                         shape = RoundedCornerShape(12.dp),
-                        color = LinkLiftAccent.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, LinkLiftAccent.copy(alpha = 0.5f)),
+                        color = LinkLiftYouTubeRed.copy(alpha = 0.14f),
+                        border = BorderStroke(1.dp, LinkLiftYouTubeRed.copy(alpha = 0.45f)),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
@@ -302,13 +305,13 @@ private fun DownloadDetailCard(
                             Icon(
                                 imageVector = Icons.Rounded.Lock,
                                 contentDescription = null,
-                                tint = LinkLiftAccentBright,
+                                tint = LinkLiftYouTubeRed,
                                 modifier = Modifier.size(18.dp),
                             )
                             Text(
                                 text = "YouTube Auth Required • Tap to Sign In",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = LinkLiftAccentBright,
+                                color = LinkLiftYouTubeRedBright,
                             )
                         }
                     }
@@ -327,6 +330,7 @@ private fun DownloadDetailCardHeader(
     selectionMode: Boolean,
     selected: Boolean,
     isActive: Boolean,
+    sourceUrl: String? = null,
     onSelectionChanged: (Boolean) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -337,13 +341,20 @@ private fun DownloadDetailCardHeader(
     ) {
         DownloadThumbnail(kind = kind, state = state, large = true)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                PlatformBadge(url = sourceUrl)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            }
             ExpandableDescriptionText(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
@@ -355,9 +366,9 @@ private fun DownloadDetailCardHeader(
                 checked = selected,
                 onCheckedChange = { checked -> onSelectionChanged(checked) },
                 colors = CheckboxDefaults.colors(
-                    checkedColor = LinkLiftAccent,
-                    checkmarkColor = Color.White,
-                    uncheckedColor = LinkLiftAccentBright.copy(alpha = 0.8f),
+                    checkedColor = Color.White,
+                    checkmarkColor = Color(0xFF0F0F0F),
+                    uncheckedColor = LinkLiftTextSecondary,
                 ),
             )
         } else if (isActive) {
@@ -394,7 +405,7 @@ private fun DownloadDetailCardProgress(
         color = when (state) {
             DownloadState.Completed -> LinkLiftSuccess
             DownloadState.Failed -> LinkLiftError
-            else -> LinkLiftAccent
+            else -> Color.White
         },
         trackColor = Color.White.copy(alpha = 0.08f),
     )
@@ -463,7 +474,7 @@ private fun DownloadedFileViewer(
                     TextButton(
                         onClick = { openDownloadedFile(context, localUri, download.mimeType) },
                     ) {
-                        Text("External", color = LinkLiftAccentBright)
+                        Text("External", color = Color.White)
                     }
                 }
 
@@ -560,9 +571,9 @@ private fun DownloadThumbnail(
                 .background(
                     Brush.linearGradient(
                         colors = when (state) {
-                            DownloadState.Completed -> listOf(LinkLiftSuccess.copy(alpha = 0.25f), LinkLiftAccent.copy(alpha = 0.18f))
+                            DownloadState.Completed -> listOf(LinkLiftSuccess.copy(alpha = 0.25f), Color.White.copy(alpha = 0.10f))
                             DownloadState.Failed -> listOf(LinkLiftError.copy(alpha = 0.28f), LinkLiftCard)
-                            else -> listOf(LinkLiftAccent.copy(alpha = 0.25f), LinkLiftAccentBright.copy(alpha = 0.18f))
+                            else -> listOf(Color.White.copy(alpha = 0.20f), Color(0xFF272727))
                         }
                     )
                 ),

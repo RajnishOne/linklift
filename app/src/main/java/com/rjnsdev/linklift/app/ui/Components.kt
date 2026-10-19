@@ -47,8 +47,48 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftTheme
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftBackground
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftInstagramPink
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
+import java.util.Locale
+
+internal fun getPlatformBrand(url: String?, host: String? = null): Pair<String, Color>? {
+    if (!url.isNullOrBlank()) {
+        if (isYouTubeUrl(url)) return "YouTube" to LinkLiftYouTubeRed
+        if (isInstagramUrl(url)) return "Instagram" to LinkLiftInstagramPink
+    }
+    val h = host?.lowercase(Locale.ROOT).orEmpty()
+    if (h.contains("youtube") || h.contains("youtu.be")) return "YouTube" to LinkLiftYouTubeRed
+    if (h.contains("instagram") || h.contains("instagr.am")) return "Instagram" to LinkLiftInstagramPink
+    return null
+}
+
+@Composable
+internal fun PlatformBadge(
+    url: String? = null,
+    host: String? = null,
+    modifier: Modifier = Modifier,
+) {
+    val platform = getPlatformBrand(url, host) ?: return
+    val (name, color) = platform
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(6.dp),
+        color = color.copy(alpha = 0.16f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)),
+    ) {
+        Text(
+            text = name,
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+            style = chipTextStyle(MaterialTheme.typography.labelSmall),
+            color = color,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
 
 @Composable
 internal fun NeonCard(
@@ -77,7 +117,7 @@ internal fun TitleActionRow(
     titleStyle: TextStyle = MaterialTheme.typography.titleLarge,
     actionStyle: TextStyle = MaterialTheme.typography.labelLarge,
     titleColor: Color = Color.White,
-    actionColor: Color = LinkLiftAccentBright,
+    actionColor: Color = Color.White,
 ) {
     if (isLargeFont()) {
         Column(
@@ -155,11 +195,18 @@ internal fun MetricPill(
 }
 
 @Composable
-internal fun InfoChip(title: String, value: String) {
+internal fun InfoChip(
+    title: String,
+    value: String,
+    accentColor: Color? = null,
+) {
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            accentColor?.copy(alpha = 0.55f) ?: MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+        ),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -168,12 +215,12 @@ internal fun InfoChip(title: String, value: String) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.labelSmall,
-                color = LinkLiftTextMuted,
+                color = accentColor ?: LinkLiftTextMuted,
             )
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelLarge,
-                color = Color.White,
+                color = accentColor ?: Color.White,
             )
         }
     }
@@ -194,7 +241,7 @@ internal fun EmptyStateCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = LinkLiftAccentBright,
+                tint = Color.White,
                 modifier = Modifier.size(34.dp),
             )
             Text(
@@ -218,17 +265,17 @@ internal fun MergeBadge(modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.widthIn(min = 56.dp),
         shape = RoundedCornerShape(8.dp),
-        color = LinkLiftAccentBright.copy(alpha = 0.18f),
+        color = Color.White.copy(alpha = 0.12f),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            LinkLiftAccentBright.copy(alpha = 0.6f),
+            Color.White.copy(alpha = 0.4f),
         ),
     ) {
         Text(
             text = "MERGE",
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = chipTextStyle(MaterialTheme.typography.labelSmall),
-            color = LinkLiftAccentBright,
+            color = Color.White,
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Clip,
@@ -257,26 +304,12 @@ internal fun AppBackground(content: @Composable () -> Unit) {
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            LinkLiftAccent.copy(alpha = 0.12f),
+                            Color(0xFF222222).copy(alpha = 0.35f),
                             Color.Transparent,
                         ),
                         radius = 900f,
                     )
                 )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            LinkLiftAccentBright.copy(alpha = 0.05f),
-                            Color.Transparent,
-                        ),
-                        radius = 700f,
-                    )
-                )
-                .alpha(0.8f)
         )
         content()
     }
@@ -348,13 +381,13 @@ internal fun ExpandableDescriptionText(
                 Text(
                     text = if (isExpanded) "Show less" else "Show more",
                     style = MaterialTheme.typography.labelMedium,
-                    color = LinkLiftAccentBright,
+                    color = Color.White,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Icon(
                     imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                     contentDescription = if (isExpanded) "Show less" else "Show more",
-                    tint = LinkLiftAccentBright,
+                    tint = Color.White,
                     modifier = Modifier.size(16.dp),
                 )
             }

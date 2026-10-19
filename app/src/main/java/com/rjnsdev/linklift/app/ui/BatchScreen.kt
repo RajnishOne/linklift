@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
@@ -74,7 +75,7 @@ internal fun BatchScreen(
                             Text(
                                 text = batch.label,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = LinkLiftAccentBright,
+                                color = Color.White,
                             )
                             Text(
                                 text = batch.title,
@@ -90,7 +91,7 @@ internal fun BatchScreen(
                                 BatchSource.BulkPaste -> Icons.Rounded.Collections
                             },
                             contentDescription = null,
-                            tint = LinkLiftAccentBright,
+                            tint = Color.White,
                             modifier = Modifier.size(34.dp),
                         )
                     }
@@ -115,14 +116,14 @@ internal fun BatchScreen(
                         Text(
                             text = "Showing first ${batch.returnedCount} of ${batch.totalCount} items. Open source link to download the rest.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = LinkLiftAccentBright,
+                            color = LinkLiftTextSecondary,
                         )
                     }
                     if (batch.entries.size > BATCH_AUTO_SELECT_LIMIT) {
                         Text(
                             text = "Large batch. Nothing selected by default. Check the items you want to download.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = LinkLiftAccentBright,
+                            color = LinkLiftTextSecondary,
                         )
                     }
                 }
@@ -144,7 +145,7 @@ internal fun BatchScreen(
                                 else (progress.processed.toFloat() / progress.total.toFloat()).coerceIn(0f, 1f)
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            color = LinkLiftAccent,
+                            color = Color.White,
                             trackColor = Color.White.copy(alpha = 0.08f),
                         )
                         Text(
@@ -210,20 +211,29 @@ internal fun BatchScreen(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 16.dp),
                 enabled = !isProcessing && selectedCount > 0,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF0F0F0F),
+                    disabledContainerColor = Color.White.copy(alpha = 0.12f),
+                    disabledContentColor = LinkLiftTextMuted,
+                ),
             ) {
                 Icon(
                     imageVector = Icons.Rounded.CloudDownload,
                     contentDescription = null,
+                    tint = if (!isProcessing && selectedCount > 0) Color(0xFF0F0F0F) else LinkLiftTextMuted,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    if (isProcessing) {
+                    text = if (isProcessing) {
                         "Queuing downloads..."
                     } else if (selectedCount > 0) {
                         "Download $selectedCount item${if (selectedCount == 1) "" else "s"}"
                     } else {
                         "Select items to download"
-                    }
+                    },
+                    color = if (!isProcessing && selectedCount > 0) Color(0xFF0F0F0F) else LinkLiftTextMuted,
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
         }
@@ -240,6 +250,8 @@ private fun BatchEntryRow(
     NeonCard(
         modifier = if (isProcessing) Modifier else Modifier.clickable { onCheckedChange(!isChecked) },
     ) {
+        val platform = getPlatformBrand(entry.sourceUrl, entry.host)
+        val brandColor = platform?.second ?: Color.White
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -248,14 +260,14 @@ private fun BatchEntryRow(
             Surface(
                 modifier = Modifier.size(48.dp),
                 shape = RoundedCornerShape(16.dp),
-                color = LinkLiftAccent.copy(alpha = 0.18f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, LinkLiftAccent.copy(alpha = 0.45f)),
+                color = brandColor.copy(alpha = 0.16f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, brandColor.copy(alpha = 0.45f)),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Rounded.PlayCircleOutline,
                         contentDescription = null,
-                        tint = LinkLiftAccentBright,
+                        tint = brandColor,
                     )
                 }
             }
@@ -294,9 +306,9 @@ private fun BatchEntryRow(
                 onCheckedChange = onCheckedChange,
                 enabled = !isProcessing,
                 colors = CheckboxDefaults.colors(
-                    checkedColor = LinkLiftAccent,
-                    checkmarkColor = Color.White,
-                    uncheckedColor = LinkLiftAccentBright.copy(alpha = 0.8f),
+                    checkedColor = Color.White,
+                    checkmarkColor = Color(0xFF0F0F0F),
+                    uncheckedColor = LinkLiftTextSecondary,
                 ),
             )
         }

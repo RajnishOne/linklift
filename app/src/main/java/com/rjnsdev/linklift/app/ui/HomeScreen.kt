@@ -50,9 +50,12 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCyan
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftInstagramPink
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftSuccess
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
+import androidx.compose.material3.ButtonDefaults
 
 
 
@@ -193,13 +196,22 @@ internal fun LinkComposerCard(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF0F0F0F),
+                ),
             ) {
                 Icon(
                     imageVector = analyzeIcon,
                     contentDescription = null,
+                    tint = Color(0xFF0F0F0F),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(analyzeLabel)
+                Text(
+                    text = analyzeLabel,
+                    color = Color(0xFF0F0F0F),
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
         }
     }
@@ -209,7 +221,7 @@ internal fun LinkComposerCard(
 internal fun linkFieldColors() = TextFieldDefaults.colors(
     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-    focusedIndicatorColor = LinkLiftAccent,
+    focusedIndicatorColor = Color.White,
     unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
     focusedTextColor = Color.White,
     unfocusedTextColor = Color.White,
@@ -221,14 +233,25 @@ private data class SupportLinkItem(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
+    val brandColor: Color,
 )
 
 @Composable
 private fun rememberSupportLinkItems(): List<SupportLinkItem> {
     return remember {
         listOf(
-            SupportLinkItem("YouTube", "Videos, Shorts, Playlists & Audio", Icons.Rounded.PlayCircleOutline),
-            SupportLinkItem("Instagram", "Reels, Posts & Multi-slide Carousels", Icons.Rounded.PlayCircleOutline),
+            SupportLinkItem(
+                title = "YouTube",
+                subtitle = "Videos, Shorts, Playlists & Audio",
+                icon = Icons.Rounded.PlayCircleOutline,
+                brandColor = LinkLiftYouTubeRed,
+            ),
+            SupportLinkItem(
+                title = "Instagram",
+                subtitle = "Reels, Posts & Multi-slide Carousels",
+                icon = Icons.Rounded.PlayCircleOutline,
+                brandColor = LinkLiftInstagramPink,
+            ),
         )
     }
 }
@@ -262,6 +285,7 @@ private fun SupportLinksGrid(
                         title = item.title,
                         subtitle = item.subtitle,
                         icon = item.icon,
+                        brandColor = item.brandColor,
                     )
                 }.first().measure(Constraints.fixedWidth(cellWidthPx)).height
             }
@@ -279,6 +303,7 @@ private fun SupportLinksGrid(
                             title = item.title,
                             subtitle = item.subtitle,
                             icon = item.icon,
+                            brandColor = item.brandColor,
                         )
                     }.first().measure(Constraints.fixed(cellWidthPx, uniformHeightPx))
                 }
@@ -311,6 +336,7 @@ internal fun SupportCard(
     title: String,
     subtitle: String,
     icon: ImageVector,
+    brandColor: Color,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -328,12 +354,12 @@ internal fun SupportCard(
         ) {
             Surface(
                 shape = CircleShape,
-                color = LinkLiftAccent.copy(alpha = 0.14f),
+                color = brandColor.copy(alpha = 0.16f),
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = LinkLiftAccentBright,
+                    tint = brandColor,
                     modifier = Modifier.padding(12.dp),
                 )
             }

@@ -481,7 +481,7 @@ fun LinkLiftVideoPlayer(
                         Icon(
                             imageVector = if (isFull) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
                             contentDescription = "Toggle Fullscreen",
-                            tint = LinkLiftAccentBright,
+                            tint = Color.White,
                             modifier = Modifier.size(22.dp),
                         )
                     }
@@ -636,8 +636,8 @@ fun LinkLiftVideoPlayer(
                                 onClick = { playbackSpeed = speed },
                                 label = { Text("${speed}x") },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = LinkLiftAccent,
-                                    selectedLabelColor = Color.White,
+                                    selectedContainerColor = Color.White,
+                                    selectedLabelColor = Color(0xFF0F0F0F),
                                 ),
                             )
                         }
@@ -666,8 +666,8 @@ fun LinkLiftVideoPlayer(
                                     },
                                     label = { Text(label) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = LinkLiftAccent,
-                                        selectedLabelColor = Color.White,
+                                        selectedContainerColor = Color.White,
+                                        selectedLabelColor = Color(0xFF0F0F0F),
                                     ),
                                 )
                             }
@@ -698,8 +698,8 @@ fun LinkLiftVideoPlayer(
                                 onClick = { resizeMode = option.mode },
                                 label = { Text(option.label) },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = LinkLiftAccent,
-                                    selectedLabelColor = Color.White,
+                                    selectedContainerColor = Color.White,
+                                    selectedLabelColor = Color(0xFF0F0F0F),
                                 ),
                             )
                         }
@@ -732,8 +732,8 @@ fun LinkLiftVideoPlayer(
                                 },
                                 label = { Text("Off") },
                                 colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = LinkLiftAccent,
-                                    selectedLabelColor = Color.White,
+                                    selectedContainerColor = Color.White,
+                                    selectedLabelColor = Color(0xFF0F0F0F),
                                 ),
                             )
                             availableSubtitles.forEachIndexed { idx, sub ->
@@ -745,8 +745,8 @@ fun LinkLiftVideoPlayer(
                                     },
                                     label = { Text(sub.label) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = LinkLiftAccent,
-                                        selectedLabelColor = Color.White,
+                                        selectedContainerColor = Color.White,
+                                        selectedLabelColor = Color(0xFF0F0F0F),
                                     ),
                                 )
                             }
@@ -775,8 +775,8 @@ fun LinkLiftVideoPlayer(
                                     },
                                     label = { Text(audio.label) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = LinkLiftAccent,
-                                        selectedLabelColor = Color.White,
+                                        selectedContainerColor = Color.White,
+                                        selectedLabelColor = Color(0xFF0F0F0F),
                                     ),
                                 )
                             }
@@ -804,13 +804,16 @@ private fun PlayerActionButton(
     ) {
         Surface(
             shape = CircleShape,
-            color = if (isActive) LinkLiftAccent else LinkLiftCard,
-            border = androidx.compose.foundation.BorderStroke(1.dp, LinkLiftAccentBright.copy(alpha = 0.5f)),
+            color = if (isActive) Color.White else LinkLiftCard,
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (isActive) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+            ),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isActive) Color.White else LinkLiftAccentBright,
+                tint = if (isActive) Color(0xFF0F0F0F) else Color.White,
                 modifier = Modifier.padding(12.dp).size(24.dp),
             )
         }

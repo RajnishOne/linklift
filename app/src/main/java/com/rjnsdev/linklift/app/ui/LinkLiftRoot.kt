@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.material3.NavigationBarItemDefaults
 import com.rjnsdev.linklift.app.ui.YouTubeAuthActivity
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
@@ -58,6 +59,7 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTheme
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
 
 @Composable
 internal fun LinkLiftRoot(
@@ -279,6 +281,13 @@ private fun LinkLiftBottomBar(
                 onClick = { onNavigate(item.first) },
                 icon = { Icon(imageVector = item.third, contentDescription = item.second) },
                 label = { Text(item.second) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color(0xFF0F0F0F),
+                    selectedTextColor = Color.White,
+                    indicatorColor = Color.White,
+                    unselectedIconColor = LinkLiftTextSecondary,
+                    unselectedTextColor = LinkLiftTextSecondary,
+                ),
             )
         }
     }
@@ -299,7 +308,7 @@ private fun LinkLiftTopBar(
                 Text(
                     text = "LinkLift",
                     style = MaterialTheme.typography.labelMedium,
-                    color = LinkLiftAccentBright,
+                    color = LinkLiftTextSecondary,
                 )
                 Text(
                     text = title,
@@ -324,7 +333,7 @@ private fun LinkLiftTopBar(
         actions = {
             if (actionLabel != null && onAction != null) {
                 TextButton(onClick = onAction) {
-                    Text(actionLabel, color = LinkLiftAccentBright)
+                    Text(actionLabel, color = Color.White)
                 }
             }
         },
@@ -332,7 +341,7 @@ private fun LinkLiftTopBar(
             containerColor = LinkLiftCard.copy(alpha = 0.96f),
             titleContentColor = Color.White,
             navigationIconContentColor = Color.White,
-            actionIconContentColor = LinkLiftAccentBright,
+            actionIconContentColor = Color.White,
         ),
     )
 }
@@ -349,12 +358,12 @@ private fun YouTubeAuthPromptDialog(
         icon = {
             Surface(
                 shape = CircleShape,
-                color = LinkLiftAccent.copy(alpha = 0.18f),
+                color = LinkLiftYouTubeRed.copy(alpha = 0.16f),
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Lock,
                     contentDescription = null,
-                    tint = LinkLiftAccentBright,
+                    tint = LinkLiftYouTubeRed,
                     modifier = Modifier
                         .padding(12.dp)
                         .size(28.dp),
@@ -386,19 +395,20 @@ private fun YouTubeAuthPromptDialog(
             Button(
                 onClick = onSignIn,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = LinkLiftAccent,
-                    contentColor = Color.White,
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF0F0F0F),
                 ),
                 shape = RoundedCornerShape(12.dp),
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Login,
                     contentDescription = null,
+                    tint = Color(0xFF0F0F0F),
                     modifier = Modifier
                         .size(18.dp)
                         .padding(end = 4.dp),
                 )
-                Text("Sign In")
+                Text("Sign In", color = Color(0xFF0F0F0F))
             }
         },
         dismissButton = {
@@ -409,9 +419,9 @@ private fun YouTubeAuthPromptDialog(
                 OutlinedButton(
                     onClick = onOpenSettings,
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, LinkLiftAccent.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)),
                 ) {
-                    Text("Open Settings", color = LinkLiftAccentBright)
+                    Text("Open Settings", color = Color.White)
                 }
             }
         },

@@ -89,7 +89,7 @@ internal fun ProcessingScreen(
                     CircularProgressIndicator(
                         modifier = Modifier.size(progressSize),
                         strokeWidth = 6.dp,
-                        color = LinkLiftAccent,
+                        color = Color.White,
                         trackColor = Color.White.copy(alpha = 0.1f),
                     )
                     Icon(
@@ -122,7 +122,7 @@ internal fun ProcessingScreen(
                         MetricPill(
                             icon = Icons.Rounded.Shield,
                             label = "Preparing download",
-                            tint = LinkLiftAccentBright,
+                            tint = Color.White,
                         )
                         MetricPill(
                             icon = Icons.Rounded.Speed,
@@ -140,7 +140,7 @@ internal fun ProcessingScreen(
                         MetricPill(
                             icon = Icons.Rounded.Shield,
                             label = "Preparing download",
-                            tint = LinkLiftAccentBright,
+                            tint = Color.White,
                         )
                         MetricPill(
                             icon = Icons.Rounded.Speed,

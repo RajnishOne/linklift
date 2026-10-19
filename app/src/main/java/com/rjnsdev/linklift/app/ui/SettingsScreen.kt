@@ -57,6 +57,7 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -81,7 +82,7 @@ internal fun SettingsScreen(
                 Icon(
                     imageVector = Icons.Rounded.Lock,
                     contentDescription = null,
-                    tint = LinkLiftAccentBright,
+                    tint = LinkLiftYouTubeRed,
                 )
             },
             title = {
@@ -105,7 +106,7 @@ internal fun SettingsScreen(
                     Text(
                         text = "🔒 Privacy Guarantee: Your cookies stay strictly inside LinkLift's private sandbox on your phone. Nothing is ever sent to any third-party server.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = LinkLiftAccentBright,
+                        color = LinkLiftTextSecondary,
                     )
                 }
             },
@@ -234,11 +235,11 @@ private fun YouTubeAuthSettingCard(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Surface(shape = CircleShape, color = LinkLiftAccent.copy(alpha = 0.14f)) {
+                    Surface(shape = CircleShape, color = LinkLiftYouTubeRed.copy(alpha = 0.16f)) {
                         Icon(
                             imageVector = Icons.Rounded.AccountCircle,
                             contentDescription = null,
-                            tint = LinkLiftAccentBright,
+                            tint = LinkLiftYouTubeRed,
                             modifier = Modifier.padding(10.dp),
                         )
                     }
@@ -375,10 +376,10 @@ private fun AuthOptionTile(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = if (isPrimary) LinkLiftAccent.copy(alpha = 0.22f) else LinkLiftCard.copy(alpha = 0.75f),
+        color = if (isPrimary) Color.White.copy(alpha = 0.12f) else LinkLiftCard.copy(alpha = 0.75f),
         border = BorderStroke(
             1.dp,
-            if (isPrimary) LinkLiftAccent else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+            if (isPrimary) Color.White.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
         ),
     ) {
         Row(
@@ -388,12 +389,12 @@ private fun AuthOptionTile(
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (isPrimary) LinkLiftAccent else LinkLiftAccent.copy(alpha = 0.15f),
+                color = if (isPrimary) Color.White else Color.White.copy(alpha = 0.10f),
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = if (isPrimary) Color.White else LinkLiftAccentBright,
+                    tint = if (isPrimary) Color(0xFF0F0F0F) else Color.White,
                     modifier = Modifier
                         .padding(9.dp)
                         .size(20.dp),
@@ -424,8 +425,8 @@ private fun PresetRow(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val borderColor = if (isSelected) LinkLiftAccent else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-    val backgroundColor = if (isSelected) LinkLiftAccent.copy(alpha = 0.18f) else LinkLiftCard.copy(alpha = 0.7f)
+    val borderColor = if (isSelected) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val backgroundColor = if (isSelected) Color.White.copy(alpha = 0.12f) else LinkLiftCard.copy(alpha = 0.7f)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -446,7 +447,7 @@ private fun PresetRow(
                     QualityPreset.AskEveryTime -> Icons.Rounded.GraphicEq
                 },
                 contentDescription = null,
-                tint = if (isSelected) LinkLiftAccentBright else Color.White,
+                tint = Color.White,
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -464,7 +465,7 @@ private fun PresetRow(
                 Icon(
                     imageVector = Icons.Rounded.Shield,
                     contentDescription = "Selected",
-                    tint = LinkLiftAccentBright,
+                    tint = Color.White,
                 )
             }
         }
@@ -483,11 +484,11 @@ private fun SettingToggleCard(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(shape = CircleShape, color = LinkLiftAccent.copy(alpha = 0.14f)) {
+            Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.10f)) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = LinkLiftAccentBright,
+                    tint = Color.White,
                     modifier = Modifier.padding(12.dp),
                 )
             }
@@ -520,11 +521,11 @@ private fun SettingSwitchCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Surface(shape = CircleShape, color = LinkLiftAccent.copy(alpha = 0.14f)) {
+            Surface(shape = CircleShape, color = Color.White.copy(alpha = 0.10f)) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = LinkLiftAccentBright,
+                    tint = Color.White,
                     modifier = Modifier.padding(12.dp),
                 )
             }
@@ -544,12 +545,12 @@ private fun SettingSwitchCard(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = LinkLiftAccent,
-                    checkedBorderColor = LinkLiftAccentBright,
+                    checkedThumbColor = Color(0xFF0F0F0F),
+                    checkedTrackColor = Color.White,
+                    checkedBorderColor = Color.White,
                     uncheckedThumbColor = Color.White,
                     uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                    uncheckedBorderColor = LinkLiftAccentBright.copy(alpha = 0.45f),
+                    uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                 ),
             )
         }

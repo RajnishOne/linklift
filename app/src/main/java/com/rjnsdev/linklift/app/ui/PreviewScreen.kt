@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
@@ -126,7 +127,12 @@ internal fun PreviewScreen(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        InfoChip(title = preview.host, value = "Source")
+                        val platform = getPlatformBrand(preview.sourceUrl, preview.host)
+                        if (platform != null) {
+                            InfoChip(title = platform.first, value = "Platform", accentColor = platform.second)
+                        } else {
+                            InfoChip(title = preview.host, value = "Source")
+                        }
                         InfoChip(title = formatBytes(currentItem.fileSizeBytes), value = "Size")
                         currentItem.durationMs?.let { InfoChip(title = formatDuration(it), value = "Duration") }
                         currentItem.resolution?.let { InfoChip(title = it, value = "Resolution") }
@@ -235,6 +241,10 @@ internal fun PreviewScreen(
                 onClick = onDownload,
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(vertical = 16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF0F0F0F),
+                ),
             ) {
                 Icon(
                     imageVector = if (selectedFormat?.isAudioOnly == true) {
@@ -243,13 +253,18 @@ internal fun PreviewScreen(
                         Icons.Rounded.Download
                     },
                     contentDescription = null,
+                    tint = Color(0xFF0F0F0F),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 val baseLabel = if (hasMultipleItems) "Download current item" else "Download"
                 val sizeHint = selectedFormat?.fileSizeBytes
                     ?.let { formatBytes(it) }
                     ?.takeIf { it != "Unknown" }
-                Text(if (sizeHint != null) "$baseLabel • $sizeHint" else baseLabel)
+                Text(
+                    text = if (sizeHint != null) "$baseLabel • $sizeHint" else baseLabel,
+                    color = Color(0xFF0F0F0F),
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
         }
 
@@ -321,14 +336,14 @@ private fun FormatPickerCard(
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = if (audioOnlyEnabled) {
-                                LinkLiftAccent.copy(alpha = 0.18f)
+                                Color.White.copy(alpha = 0.12f)
                             } else {
                                 LinkLiftCard.copy(alpha = 0.7f)
                             },
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
                                 if (audioOnlyEnabled) {
-                                    LinkLiftAccent
+                                    Color.White
                                 } else {
                                     MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
                                 },
@@ -345,7 +360,7 @@ private fun FormatPickerCard(
                                 Icon(
                                     imageVector = Icons.Rounded.Audiotrack,
                                     contentDescription = null,
-                                    tint = if (audioOnlyEnabled) LinkLiftAccentBright else Color.White,
+                                    tint = if (audioOnlyEnabled) Color.White else LinkLiftTextSecondary,
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
@@ -363,12 +378,12 @@ private fun FormatPickerCard(
                                     checked = audioOnlyEnabled,
                                     onCheckedChange = onAudioOnlyToggled,
                                     colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = LinkLiftAccent,
-                                        checkedBorderColor = LinkLiftAccentBright,
+                                        checkedThumbColor = Color(0xFF0F0F0F),
+                                        checkedTrackColor = Color.White,
+                                        checkedBorderColor = Color.White,
                                         uncheckedThumbColor = Color.White,
                                         uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                                        uncheckedBorderColor = LinkLiftAccentBright.copy(alpha = 0.45f),
+                                        uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
                                     ),
                                 )
                             }
@@ -404,8 +419,8 @@ private fun FormatRow(
     isSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    val borderColor = if (isSelected) LinkLiftAccent else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-    val backgroundColor = if (isSelected) LinkLiftAccent.copy(alpha = 0.18f) else LinkLiftCard.copy(alpha = 0.7f)
+    val borderColor = if (isSelected) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val backgroundColor = if (isSelected) Color.White.copy(alpha = 0.12f) else LinkLiftCard.copy(alpha = 0.7f)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -422,7 +437,7 @@ private fun FormatRow(
             Icon(
                 imageVector = if (format.isAudioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.PlayCircleOutline,
                 contentDescription = null,
-                tint = if (isSelected) LinkLiftAccentBright else Color.White,
+                tint = if (isSelected) Color.White else LinkLiftTextSecondary,
                 modifier = Modifier.padding(top = 2.dp),
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -468,7 +483,7 @@ private fun FormatRow(
                 Icon(
                     imageVector = Icons.Rounded.Bolt,
                     contentDescription = "Selected",
-                    tint = LinkLiftAccentBright,
+                    tint = Color.White,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
@@ -485,13 +500,13 @@ private fun CarouselItemRow(
     onCheckedChange: (Boolean) -> Unit,
     onRowClick: () -> Unit,
 ) {
-    val accentBorder = if (isActive) LinkLiftAccent else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    val accentBorder = if (isActive) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onRowClick() },
         shape = RoundedCornerShape(20.dp),
-        color = if (isActive) LinkLiftAccent.copy(alpha = 0.12f) else LinkLiftCard.copy(alpha = 0.7f),
+        color = if (isActive) Color.White.copy(alpha = 0.12f) else LinkLiftCard.copy(alpha = 0.7f),
         border = androidx.compose.foundation.BorderStroke(1.dp, accentBorder),
     ) {
         Row(
@@ -507,7 +522,7 @@ private fun CarouselItemRow(
                     MediaKind.Unknown -> Icons.Rounded.Collections
                 },
                 contentDescription = null,
-                tint = if (isActive) LinkLiftAccentBright else Color.White,
+                tint = if (isActive) Color.White else LinkLiftTextSecondary,
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -537,9 +552,9 @@ private fun CarouselItemRow(
                 checked = isChecked,
                 onCheckedChange = onCheckedChange,
                 colors = CheckboxDefaults.colors(
-                    checkedColor = LinkLiftAccent,
-                    checkmarkColor = Color.White,
-                    uncheckedColor = LinkLiftAccentBright.copy(alpha = 0.8f),
+                    checkedColor = Color.White,
+                    checkmarkColor = Color(0xFF0F0F0F),
+                    uncheckedColor = LinkLiftTextSecondary,
                 ),
             )
         }
@@ -638,12 +653,12 @@ private fun AudioPreviewCard(item: PreviewMediaItem) {
         Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Surface(
                 shape = CircleShape,
-                color = LinkLiftAccent.copy(alpha = 0.14f),
+                color = Color.White.copy(alpha = 0.12f),
             ) {
                 Icon(
                     imageVector = Icons.Rounded.GraphicEq,
                     contentDescription = null,
-                    tint = LinkLiftAccentBright,
+                    tint = Color.White,
                     modifier = Modifier
                         .padding(22.dp)
                         .size(38.dp),
