@@ -41,7 +41,15 @@ Builds:
     gradle:
       - yes
 
+  - versionName: '2.11'
+    versionCode: 21
+    commit: v2.11
+    subdir: app
+    gradle:
+      - yes
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '2.10'
-CurrentVersionCode: 20
+CurrentVersion: '2.11'
+CurrentVersionCode: 21
+
