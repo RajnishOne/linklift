@@ -94,8 +94,18 @@ internal fun LinkLiftRoot(
         viewModel.clearMessage()
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.closeActivityEvents.collect {
+            (context as? Activity)?.finish()
+        }
+    }
+
     BackHandler(enabled = uiState.currentScreen == AppScreen.Preview) {
-        viewModel.backFromPreview()
+        if (uiState.isFromShare) {
+            (context as? Activity)?.finish()
+        } else {
+            viewModel.backFromPreview()
+        }
     }
     BackHandler(enabled = uiState.currentScreen == AppScreen.Batch) {
         if (uiState.batchProgress?.isActive == true) {
@@ -103,9 +113,15 @@ internal fun LinkLiftRoot(
         } else {
             viewModel.backFromBatch()
         }
+        if (uiState.isFromShare) {
+            (context as? Activity)?.finish()
+        }
     }
     BackHandler(enabled = uiState.currentScreen == AppScreen.Processing) {
         viewModel.cancelAnalysis()
+        if (uiState.isFromShare) {
+            (context as? Activity)?.finish()
+        }
     }
 
     val topBarTitle = when (uiState.currentScreen) {
@@ -122,13 +138,24 @@ internal fun LinkLiftRoot(
         -> null
     }
     val topBarBackAction: (() -> Unit)? = when (uiState.currentScreen) {
-        AppScreen.Preview -> viewModel::backFromPreview
+        AppScreen.Preview -> {
+            {
+                if (uiState.isFromShare) {
+                    (context as? Activity)?.finish()
+                } else {
+                    viewModel.backFromPreview()
+                }
+            }
+        }
         AppScreen.Batch -> {
             {
                 if (uiState.batchProgress?.isActive == true) {
                     viewModel.cancelBatchProcessing()
                 } else {
                     viewModel.backFromBatch()
+                }
+                if (uiState.isFromShare) {
+                    (context as? Activity)?.finish()
                 }
             }
         }

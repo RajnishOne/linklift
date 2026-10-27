@@ -208,5 +208,6 @@ data class LinkLiftUiState(
     val downloadServiceAvailable: Boolean = true,
     val showYouTubeAuthPrompt: Boolean = false,
     val youTubeAuthPromptReason: String? = null,
+    val isFromShare: Boolean = false,
 )
 

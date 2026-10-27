@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.util.Patterns
 import android.webkit.MimeTypeMap
 import android.webkit.URLUtil
+import android.widget.Toast
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
@@ -24,8 +25,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -34,6 +38,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -78,6 +83,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         )
     )
     val uiState: StateFlow<LinkLiftUiState> = _uiState.asStateFlow()
+
+    private val _closeActivityEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val closeActivityEvents: SharedFlow<Unit> = _closeActivityEvents.asSharedFlow()
 
     init {
         observePreferences()
@@ -247,7 +255,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun handleSharedText(sharedText: String?): Boolean {
+    fun handleSharedText(sharedText: String?, isFromShare: Boolean = true): Boolean {
         val text = sharedText?.trim().orEmpty()
         if (text.isBlank()) return false
 
@@ -256,6 +264,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             _uiState.update {
                 it.copy(
                     currentScreen = AppScreen.Home,
+                    isFromShare = isFromShare,
                     message = "Couldn't find a link in what was shared.",
                 )
             }
@@ -265,6 +274,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Home,
+                isFromShare = isFromShare,
                 inputUrl = if (urls.size == 1) urls.first() else urls.joinToString("\n"),
                 message = if (urls.size > 1) {
                     "Received ${urls.size} links. Preparing your batch..."
@@ -574,11 +584,18 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     item = finalItem,
                     format = finalFormat,
                 )
-                _uiState.update {
-                    it.copy(
-                        currentScreen = AppScreen.Downloads,
-                        message = "Download queued in ${defaultDownloadLocation()}",
-                    )
+                if (state.isFromShare) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(appContext, "Download started: ${finalItem.title}", Toast.LENGTH_LONG).show()
+                        _closeActivityEvents.tryEmit(Unit)
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            currentScreen = AppScreen.Downloads,
+                            message = "Download queued in ${defaultDownloadLocation()}",
+                        )
+                    }
                 }
                 return@launch
             }
@@ -599,11 +616,18 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     formats = listOf(finalFormat),
                 )
             }.onSuccess {
-                _uiState.update {
-                    it.copy(
-                        currentScreen = AppScreen.Downloads,
-                        message = "Download queued in ${defaultDownloadLocation()}",
-                    )
+                if (state.isFromShare) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(appContext, "Download started: ${finalItem.title}", Toast.LENGTH_LONG).show()
+                        _closeActivityEvents.tryEmit(Unit)
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            currentScreen = AppScreen.Downloads,
+                            message = "Download queued in ${defaultDownloadLocation()}",
+                        )
+                    }
                 }
             }.onFailure { error ->
                 _uiState.update {
@@ -726,11 +750,16 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
 
         if (standard.isEmpty()) {
-            _uiState.update {
-                it.copy(
-                    currentScreen = AppScreen.Downloads,
-                    message = "Merging ${merges.size} item${if (merges.size == 1) "" else "s"} • saving to ${defaultDownloadLocation()}",
-                )
+            if (uiState.value.isFromShare) {
+                Toast.makeText(appContext, "Started ${merges.size} download${if (merges.size == 1) "" else "s"}", Toast.LENGTH_LONG).show()
+                _closeActivityEvents.tryEmit(Unit)
+            } else {
+                _uiState.update {
+                    it.copy(
+                        currentScreen = AppScreen.Downloads,
+                        message = "Merging ${merges.size} item${if (merges.size == 1) "" else "s"} • saving to ${defaultDownloadLocation()}",
+                    )
+                }
             }
             return
         }
@@ -745,11 +774,18 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 )
             }.onSuccess {
                 val totalQueued = standard.size + merges.size
-                _uiState.update {
-                    it.copy(
-                        currentScreen = AppScreen.Downloads,
-                        message = "$totalQueued download${if (totalQueued == 1) "" else "s"} queued in ${defaultDownloadLocation()}",
-                    )
+                if (uiState.value.isFromShare) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(appContext, "Started $totalQueued download${if (totalQueued == 1) "" else "s"}", Toast.LENGTH_LONG).show()
+                        _closeActivityEvents.tryEmit(Unit)
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            currentScreen = AppScreen.Downloads,
+                            message = "$totalQueued download${if (totalQueued == 1) "" else "s"} queued in ${defaultDownloadLocation()}",
+                        )
+                    }
                 }
             }.onFailure { error ->
                 _uiState.update {
@@ -965,18 +1001,25 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
 
             batchProcessingJob = null
-            _uiState.update {
-                it.copy(
-                    currentScreen = AppScreen.Downloads,
-                    batchProgress = null,
-                    batch = null,
-                    selectedBatchIndices = emptySet(),
-                    message = buildString {
-                        append("Queued $succeeded of ${selectedEntries.size}")
-                        if (failed > 0) append(" • $failed failed")
-                        append(" • Saved to ${defaultDownloadLocation()}")
-                    },
-                )
+            if (uiState.value.isFromShare) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(appContext, "Queued $succeeded of ${selectedEntries.size} downloads", Toast.LENGTH_LONG).show()
+                    _closeActivityEvents.tryEmit(Unit)
+                }
+            } else {
+                _uiState.update {
+                    it.copy(
+                        currentScreen = AppScreen.Downloads,
+                        batchProgress = null,
+                        batch = null,
+                        selectedBatchIndices = emptySet(),
+                        message = buildString {
+                            append("Queued $succeeded of ${selectedEntries.size}")
+                            if (failed > 0) append(" • $failed failed")
+                            append(" • Saved to ${defaultDownloadLocation()}")
+                        },
+                    )
+                }
             }
         }
     }

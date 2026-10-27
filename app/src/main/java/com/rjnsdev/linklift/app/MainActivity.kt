@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
             ?: intent.clipData?.getItemAt(0)?.text?.toString()
             ?: intent.dataString
 
-        val handled = viewModel.handleSharedText(sharedText)
+        val handled = viewModel.handleSharedText(sharedText, isFromShare = true)
         if (handled) {
             setIntent(Intent())
         }
