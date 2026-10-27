@@ -375,7 +375,7 @@ private fun LinkLiftTopBar(
 }
 
 @Composable
-private fun YouTubeAuthPromptDialog(
+internal fun YouTubeAuthPromptDialog(
     reason: String?,
     onSignIn: () -> Unit,
     onOpenSettings: () -> Unit,

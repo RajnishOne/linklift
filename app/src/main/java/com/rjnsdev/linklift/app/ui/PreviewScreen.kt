@@ -301,7 +301,7 @@ internal fun PreviewScreen(
 }
 
 @Composable
-private fun FormatPickerCard(
+internal fun FormatPickerCard(
     preview: MediaPreview,
     formats: List<MediaFormat>,
     hasAudioOnly: Boolean,
@@ -420,7 +420,7 @@ private fun FormatPickerCard(
 }
 
 @Composable
-private fun FormatRow(
+internal fun FormatRow(
     format: MediaFormat,
     isSelected: Boolean,
     onClick: () -> Unit,
