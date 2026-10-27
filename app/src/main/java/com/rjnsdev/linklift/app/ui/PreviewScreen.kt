@@ -708,9 +708,18 @@ private fun VideoPreviewCard(
     onFormatSelected: ((MediaFormat) -> Unit)? = null,
 ) {
     val activeFormat = selectedFormat ?: item.formats.firstOrNull { !it.isAudioOnly }
-    val mediaUri = activeFormat?.mediaUrl ?: item.resolvedUrl
-    val audioUri = activeFormat?.mergeAudio?.mediaUrl
-    val previewHeaders = activeFormat?.httpHeaders
+    val previewFormat = remember(activeFormat, item.formats) {
+        if (activeFormat != null && (activeFormat.height ?: 0) > 1080) {
+            // Find highest quality <= 1080p stream for safe mobile hardware decoding
+            item.formats.filter { !it.isAudioOnly && (it.height ?: 0) <= 1080 }
+                .maxByOrNull { (it.height ?: 0) * 100_000L + (it.tbr ?: 0) } ?: activeFormat
+        } else {
+            activeFormat
+        }
+    }
+    val mediaUri = previewFormat?.mediaUrl ?: item.resolvedUrl
+    val audioUri = previewFormat?.mergeAudio?.mediaUrl
+    val previewHeaders = previewFormat?.httpHeaders
         ?: item.formats.firstOrNull { it.mediaUrl == item.resolvedUrl }?.httpHeaders
         ?: emptyMap()
 
