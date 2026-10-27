@@ -114,6 +114,7 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
+import com.rjnsdev.linklift.app.util.CookieHelper
 
 data class ResizeModeOption(
     val mode: Int,
@@ -166,7 +167,7 @@ fun LinkLiftVideoPlayer(
     var selectedAudioIndex by remember { mutableIntStateOf(0) }
 
     var savedPositionMs by remember { mutableLongStateOf(0L) }
-    var wasPlayingState by remember { mutableStateOf(false) }
+    var wasPlayingState by remember { mutableStateOf(true) }
     var playerError by remember { mutableStateOf<String?>(null) }
 
     val exoPlayer = remember(mediaUri, audioUri, httpHeaders) {
@@ -195,22 +196,34 @@ fun LinkLiftVideoPlayer(
             }
         }
 
-        val chunkSize = 5 * 1024 * 1024L
+        val chunkSize = 2 * 1024 * 1024L
         val okHttpClient = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .addNetworkInterceptor { chain ->
+            .addInterceptor { chain ->
                 val request = chain.request()
                 val isGv = request.url.host.contains("googlevideo.com")
                 val finalRequest = if (isGv) {
+                    val clen = request.url.queryParameter("clen")?.toLongOrNull()
+                    val maxEnd = if (clen != null && clen > 0L) clen - 1L else Long.MAX_VALUE
+
                     val rangeHeader = request.header("Range")
-                    val boundedRange = when {
-                        rangeHeader == null -> "bytes=0-${chunkSize - 1}"
-                        rangeHeader.endsWith("-") -> {
-                            val start = rangeHeader.removePrefix("bytes=").removeSuffix("-").toLongOrNull() ?: 0L
-                            "bytes=$start-${start + chunkSize - 1}"
+                    val boundedRange = if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
+                        val spec = rangeHeader.removePrefix("bytes=").trim()
+                        val parts = spec.split("-")
+                        val start = parts[0].toLongOrNull() ?: 0L
+                        val safeStart = if (clen != null && clen > 0L) start.coerceAtMost(maxEnd) else start
+                        val requestedEnd = if (parts.size > 1 && parts[1].isNotBlank()) parts[1].toLongOrNull() else null
+                        val targetEnd = if (requestedEnd != null) {
+                            minOf(requestedEnd, safeStart + chunkSize - 1).coerceAtMost(maxEnd)
+                        } else {
+                            (safeStart + chunkSize - 1).coerceAtMost(maxEnd)
                         }
-                        else -> rangeHeader
+                        val clampedEnd = maxOf(safeStart, targetEnd)
+                        "bytes=$safeStart-$clampedEnd"
+                    } else {
+                        val targetEnd = minOf(chunkSize - 1, maxEnd)
+                        "bytes=0-$targetEnd"
                     }
                     request.newBuilder()
                         .header("Range", boundedRange)
@@ -218,10 +231,7 @@ fun LinkLiftVideoPlayer(
                 } else {
                     request
                 }
-                android.util.Log.d("LinkLiftVideoPlayer", "HTTP REQ: ${finalRequest.method} ${finalRequest.url} range=${finalRequest.header("Range")}")
-                val response = chain.proceed(finalRequest)
-                android.util.Log.d("LinkLiftVideoPlayer", "HTTP RESP: ${response.code} for ${finalRequest.url}")
-                response
+                chain.proceed(finalRequest)
             }
             .build()
 
@@ -237,8 +247,10 @@ fun LinkLiftVideoPlayer(
         val player = builder.build()
 
         val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(mediaUri))
-        val finalSource = if (!audioUri.isNullOrBlank()) {
-            val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUri))
+        val hasYouTubeCookies = CookieHelper.hasValidCookies(context)
+        val shouldMergeAudio = !audioUri.isNullOrBlank() && (!isGoogleVideo || hasYouTubeCookies)
+        val finalSource = if (shouldMergeAudio) {
+            val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUri!!))
             MergingMediaSource(videoSource, audioSource)
         } else {
             videoSource
@@ -264,12 +276,38 @@ fun LinkLiftVideoPlayer(
                 if (!audioUri.isNullOrBlank() && !didFallbackToVideoOnly) {
                     didFallbackToVideoOnly = true
                     android.util.Log.w("LinkLiftVideoPlayer", "Audio merge failed; falling back to video-only preview")
-                    val mediaSourceFactory = DefaultMediaSourceFactory(exoPlayer.mediaMetadata.let {
-                        val okHttpClient = OkHttpClient.Builder().followRedirects(true).followSslRedirects(true).build()
-                        OkHttpDataSource.Factory(okHttpClient)
-                    })
-                    val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(mediaUri))
-                    exoPlayer.setMediaSource(videoSource)
+                    val fallbackSource = exoPlayer.mediaMetadata.let {
+                        val videoItem = MediaItem.fromUri(mediaUri)
+                        // Re-create video-only source
+                        DefaultMediaSourceFactory(
+                            OkHttpDataSource.Factory(
+                                OkHttpClient.Builder()
+                                    .followRedirects(true)
+                                    .followSslRedirects(true)
+                                    .addInterceptor { chain ->
+                                        val req = chain.request()
+                                        val isGv = req.url.host.contains("googlevideo.com")
+                                        val newReq = if (isGv) {
+                                            val clen = req.url.queryParameter("clen")?.toLongOrNull()
+                                            val maxEnd = if (clen != null && clen > 0L) clen - 1L else Long.MAX_VALUE
+                                            val rh = req.header("Range")
+                                            val spec = rh?.removePrefix("bytes=")?.trim()
+                                            val start = spec?.substringBefore('-')?.toLongOrNull() ?: 0L
+                                            val safeStart = if (clen != null && clen > 0L) start.coerceAtMost(maxEnd) else start
+                                            val end = minOf(safeStart + 2 * 1024 * 1024L - 1, maxEnd)
+                                            req.newBuilder().header("Range", "bytes=$safeStart-$end").build()
+                                        } else req
+                                        chain.proceed(newReq)
+                                    }
+                                    .build()
+                            ).apply {
+                                val extractionUserAgent = httpHeaders.entries
+                                    .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
+                                setUserAgent(extractionUserAgent ?: linkLiftUserAgent)
+                            }
+                        ).createMediaSource(videoItem)
+                    }
+                    exoPlayer.setMediaSource(fallbackSource)
                     exoPlayer.prepare()
                     exoPlayer.play()
                     return

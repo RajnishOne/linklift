@@ -35,6 +35,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -435,6 +436,13 @@ class MergeDownloadService : Service() {
         val extractionUserAgent = headers.entries
             .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
         val effectiveUserAgent = extractionUserAgent ?: linkLiftUserAgent
+
+        val clen = url.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()
+        if (isGoogleVideo && clen != null && clen > 0L) {
+            downloadGoogleVideoChunked(url, headers, target, effectiveUserAgent, clen, onProgress)
+            return
+        }
+
         builder.header("User-Agent", effectiveUserAgent)
 
         headers.forEach { (name, value) ->
@@ -498,6 +506,79 @@ class MergeDownloadService : Service() {
                     }
                     onProgress(bytesSoFar, total)
                 }
+            }
+        }
+    }
+
+    private suspend fun downloadGoogleVideoChunked(
+        url: String,
+        headers: Map<String, String>,
+        target: File,
+        effectiveUserAgent: String,
+        totalBytes: Long,
+        onProgress: (Long, Long?) -> Unit,
+    ) {
+        val chunkSize = 10 * 1024 * 1024L // 10MB chunks
+        var bytesSoFar = target.takeIf { it.exists() }?.length() ?: 0L
+        if (bytesSoFar >= totalBytes) {
+            onProgress(totalBytes, totalBytes)
+            return
+        }
+
+        val sanitizedHeaders = mutableMapOf<String, String>()
+        headers.forEach { (name, value) ->
+            if (!name.equals("Range", ignoreCase = true) &&
+                !name.equals("User-Agent", ignoreCase = true) &&
+                !name.equals("Sec-Fetch-Mode", ignoreCase = true) &&
+                !name.equals("Sec-Fetch-User", ignoreCase = true) &&
+                !name.equals("Sec-Fetch-Site", ignoreCase = true) &&
+                !name.equals("Sec-Fetch-Dest", ignoreCase = true) &&
+                !name.equals("Accept", ignoreCase = true)
+            ) {
+                sanitizedHeaders[name] = value
+            }
+        }
+
+        FileOutputStream(target, true).use { output ->
+            while (bytesSoFar < totalBytes) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val chunkEnd = minOf(bytesSoFar + chunkSize - 1L, totalBytes - 1L)
+                val reqBuilder = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", effectiveUserAgent)
+                    .header("Range", "bytes=$bytesSoFar-$chunkEnd")
+
+                sanitizedHeaders.forEach { (k, v) -> reqBuilder.header(k, v) }
+
+                val response = okHttpClient.newCall(reqBuilder.get().build()).execute()
+                response.use { resp ->
+                    if (!resp.isSuccessful) {
+                        val isYt = url.contains("googlevideo.com")
+                        val detail = if (resp.code == 403 && isYt) {
+                            "HTTP 403 (YouTube authentication required)"
+                        } else {
+                            "HTTP ${resp.code}"
+                        }
+                        throw IOException("Download chunk failed: $detail for $url")
+                    }
+                    val body = resp.body ?: throw IOException("Empty response body for $url")
+                    val buffer = ByteArray(64 * 1024)
+                    var read: Int
+                    var lastReported = 0L
+                    body.byteStream().use { input ->
+                        while (input.read(buffer).also { read = it } > 0) {
+                            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                            output.write(buffer, 0, read)
+                            bytesSoFar += read
+                            val now = System.currentTimeMillis()
+                            if (now - lastReported >= 250L) {
+                                lastReported = now
+                                onProgress(bytesSoFar, totalBytes)
+                            }
+                        }
+                    }
+                }
+                onProgress(bytesSoFar, totalBytes)
             }
         }
     }

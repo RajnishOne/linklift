@@ -111,24 +111,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             MergeJobStore.jobs
                 .distinctUntilChanged { old, new -> mergeJobsUiFingerprint(old) == mergeJobsUiFingerprint(new) }
                 .collect { jobs ->
-                    val hasFailed403 = jobs.values.any { job ->
-                        job.state == MergeJobState.Failed && (job.errorMessage?.contains("403") == true || job.errorMessage?.contains("YouTube", ignoreCase = true) == true)
-                    }
-                    val hasCookies = CookieHelper.hasValidCookies(appContext)
                     _uiState.update { current ->
                         val merged = mergeDownloadsList(
                             base = current.downloads.filter { it.id >= 0 },
                             mergeJobs = jobs.values.toList(),
                             previous = current.downloads,
                         )
-                        val shouldPrompt = hasFailed403 && !hasCookies && !current.showYouTubeAuthPrompt
-                        val next = if (merged == current.downloads) current else current.copy(downloads = merged)
-                        if (shouldPrompt) {
-                            next.copy(
-                                showYouTubeAuthPrompt = true,
-                                youTubeAuthPromptReason = "A YouTube download was blocked by stream protection (HTTP 403). Sign in or import cookies to download this video.",
-                            )
-                        } else next
+                        if (merged == current.downloads) current else current.copy(downloads = merged)
                     }
                 }
         }

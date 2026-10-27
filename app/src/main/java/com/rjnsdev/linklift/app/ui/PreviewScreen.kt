@@ -110,7 +110,7 @@ internal fun PreviewScreen(
             MediaHero(
                 item = currentItem,
                 selectedFormat = selectedFormat,
-                enableOnlineVideoPreview = uiState.settings.enableOnlineVideoPreview,
+                enableOnlineVideoPreview = true,
                 onFormatSelected = { fmt -> onFormatSelected(currentIndex, fmt.formatId) },
             )
         }
