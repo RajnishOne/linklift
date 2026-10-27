@@ -5,14 +5,4 @@
         <item name="android:windowBackground">@color/linklift_background</item>
         <item name="android:windowSplashScreenBackground">@color/linklift_background</item>
     </style>
-
-    <style name="Theme.LinkLift.Overlay" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
-        <item name="android:backgroundDimEnabled">true</item>
-        <item name="android:backgroundDimAmount">0.6</item>
-    </style>
 </resources>

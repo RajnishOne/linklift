@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.VolumeMute
 import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -59,6 +60,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -165,6 +167,7 @@ fun LinkLiftVideoPlayer(
 
     var savedPositionMs by remember { mutableLongStateOf(0L) }
     var wasPlayingState by remember { mutableStateOf(false) }
+    var playerError by remember { mutableStateOf<String?>(null) }
 
     val exoPlayer = remember(mediaUri, audioUri, httpHeaders) {
         val builder = ExoPlayer.Builder(context)
@@ -173,6 +176,7 @@ fun LinkLiftVideoPlayer(
         val extractionUserAgent = httpHeaders.entries
             .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
         val effectiveUserAgent = extractionUserAgent ?: linkLiftUserAgent
+        android.util.Log.d("LinkLiftVideoPlayer", "Init player: mediaUri=$mediaUri, audioUri=$audioUri, UA=$effectiveUserAgent")
 
         val sanitizedHeaders = mutableMapOf<String, String>()
         httpHeaders.forEach { (name, value) ->
@@ -191,9 +195,34 @@ fun LinkLiftVideoPlayer(
             }
         }
 
+        val chunkSize = 5 * 1024 * 1024L
         val okHttpClient = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
+            .addNetworkInterceptor { chain ->
+                val request = chain.request()
+                val isGv = request.url.host.contains("googlevideo.com")
+                val finalRequest = if (isGv) {
+                    val rangeHeader = request.header("Range")
+                    val boundedRange = when {
+                        rangeHeader == null -> "bytes=0-${chunkSize - 1}"
+                        rangeHeader.endsWith("-") -> {
+                            val start = rangeHeader.removePrefix("bytes=").removeSuffix("-").toLongOrNull() ?: 0L
+                            "bytes=$start-${start + chunkSize - 1}"
+                        }
+                        else -> rangeHeader
+                    }
+                    request.newBuilder()
+                        .header("Range", boundedRange)
+                        .build()
+                } else {
+                    request
+                }
+                android.util.Log.d("LinkLiftVideoPlayer", "HTTP REQ: ${finalRequest.method} ${finalRequest.url} range=${finalRequest.header("Range")}")
+                val response = chain.proceed(finalRequest)
+                android.util.Log.d("LinkLiftVideoPlayer", "HTTP RESP: ${response.code} for ${finalRequest.url}")
+                response
+            }
             .build()
 
         val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient).apply {
@@ -225,15 +254,34 @@ fun LinkLiftVideoPlayer(
         player
     }
 
+    var didFallbackToVideoOnly by remember(mediaUri, audioUri) { mutableStateOf(false) }
+
     // Attach player listener for track changes and error logging
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 android.util.Log.e("LinkLiftVideoPlayer", "ExoPlayer error [${error.errorCodeName} / ${error.errorCode}]: ${error.message}", error)
+                if (!audioUri.isNullOrBlank() && !didFallbackToVideoOnly) {
+                    didFallbackToVideoOnly = true
+                    android.util.Log.w("LinkLiftVideoPlayer", "Audio merge failed; falling back to video-only preview")
+                    val mediaSourceFactory = DefaultMediaSourceFactory(exoPlayer.mediaMetadata.let {
+                        val okHttpClient = OkHttpClient.Builder().followRedirects(true).followSslRedirects(true).build()
+                        OkHttpDataSource.Factory(okHttpClient)
+                    })
+                    val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(mediaUri))
+                    exoPlayer.setMediaSource(videoSource)
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                    return
+                }
+                playerError = "Live stream preview is unavailable for this format (HTTP 403 / restricted stream). You can still download the video directly below."
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 android.util.Log.d("LinkLiftVideoPlayer", "ExoPlayer playbackState: $playbackState duration: ${exoPlayer.duration}ms")
+                if (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING) {
+                    playerError = null
+                }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -361,6 +409,48 @@ fun LinkLiftVideoPlayer(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+
+            if (playerError != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.88f))
+                        .padding(20.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.WarningAmber,
+                            contentDescription = "Warning",
+                            tint = LinkLiftAccentBright,
+                            modifier = Modifier.size(40.dp),
+                        )
+                        Text(
+                            text = "Video Preview Unavailable",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = playerError ?: "Stream preview could not be loaded.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LinkLiftTextSecondary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                playerError = null
+                                exoPlayer.prepare()
+                                exoPlayer.play()
+                            },
+                        ) {
+                            Text("Retry Preview", color = Color.White)
+                        }
+                    }
+                }
+            }
 
             // Top-left back action button overlay (animates with player controls)
             if (isFull || onBack != null) {

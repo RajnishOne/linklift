@@ -1377,12 +1377,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     private suspend fun inspectInstagramLink(url: String): MediaPreview {
         inspectInstagramWithInstaloader(url)?.let { return it }
 
-        return runCatching { inspectMediaUrl(url) }
-            .getOrElse {
-                throw IllegalArgumentException(
-                    "Couldn't read this Instagram link. Try another public post or reel link."
-                )
-            }
+        runCatching { inspectMediaUrl(url) }.getOrNull()?.let { return it }
+
+        return runCatching { invokePythonResolver(url) }
+            .getOrNull()
+            ?: throw IllegalArgumentException(
+                "Couldn't read this Instagram link. Try another public post or reel link."
+            )
     }
 
     private suspend fun resolveWithPythonOrFallback(url: String): MediaPreview {

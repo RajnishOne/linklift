@@ -13,8 +13,12 @@ _YTDLP_VERSION = tuple(
 )
 _YTDLP_ANDROID_VR_BROKEN = _YTDLP_VERSION >= (2026, 8, 17)
 
-_DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["all"]
-_DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["all"]
+if _YTDLP_ANDROID_VR_BROKEN:
+    _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["visionos", "web", "android"]
+    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["web", "mweb", "android"]
+else:
+    _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["android_vr", "android"]
+    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["web", "mweb", "android"]
 
 _YT_DLP_BASE_OPTIONS = {
     "quiet": True,
@@ -274,6 +278,14 @@ def _strip_payload_for_pair(payload):
 def _pick_audio_pair(video_fmt, audio_pool):
     if not audio_pool:
         return None
+
+    # For YouTube / GoogleVideo, itag 140 (m4a/aac) is the only audio stream that reliably streams without 403
+    v_url = (video_fmt.get("media_url") or video_fmt.get("url") or "").lower()
+    if "googlevideo.com" in v_url:
+        it140 = [a for a in audio_pool if str(a.get("format_id") or "").strip() == "140"]
+        if it140:
+            return it140[0]
+
     video_ext = (video_fmt.get("ext") or "").lower()
     if video_ext in _MP4_FAMILY_EXTS:
         preferred = _MP4_AUDIO_EXTS
@@ -469,7 +481,7 @@ def _entry_payload(entry, fallback_title=None, fallback_description=None):
     if not formats:
         return None
 
-    primary = formats[0]
+    primary = next((f for f in formats if not f.get("is_audio_only")), formats[0])
     extractor = entry.get("extractor_key") or entry.get("extractor") or "Media"
     title = (entry.get("title") or fallback_title or extractor).strip()
     description = (
