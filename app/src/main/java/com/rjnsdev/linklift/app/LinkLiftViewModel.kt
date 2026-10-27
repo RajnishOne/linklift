@@ -584,18 +584,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     item = finalItem,
                     format = finalFormat,
                 )
-                if (state.isFromShare) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(appContext, "Download started: ${finalItem.title}", Toast.LENGTH_LONG).show()
-                        _closeActivityEvents.tryEmit(Unit)
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            currentScreen = AppScreen.Downloads,
-                            message = "Download queued in ${defaultDownloadLocation()}",
-                        )
-                    }
+                _uiState.update {
+                    it.copy(
+                        currentScreen = AppScreen.Downloads,
+                        message = "Download queued in ${defaultDownloadLocation()}",
+                    )
                 }
                 return@launch
             }
@@ -616,18 +609,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     formats = listOf(finalFormat),
                 )
             }.onSuccess {
-                if (state.isFromShare) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(appContext, "Download started: ${finalItem.title}", Toast.LENGTH_LONG).show()
-                        _closeActivityEvents.tryEmit(Unit)
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            currentScreen = AppScreen.Downloads,
-                            message = "Download queued in ${defaultDownloadLocation()}",
-                        )
-                    }
+                _uiState.update {
+                    it.copy(
+                        currentScreen = AppScreen.Downloads,
+                        message = "Download queued in ${defaultDownloadLocation()}",
+                    )
                 }
             }.onFailure { error ->
                 _uiState.update {
@@ -750,16 +736,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
 
         if (standard.isEmpty()) {
-            if (uiState.value.isFromShare) {
-                Toast.makeText(appContext, "Started ${merges.size} download${if (merges.size == 1) "" else "s"}", Toast.LENGTH_LONG).show()
-                _closeActivityEvents.tryEmit(Unit)
-            } else {
-                _uiState.update {
-                    it.copy(
-                        currentScreen = AppScreen.Downloads,
-                        message = "Merging ${merges.size} item${if (merges.size == 1) "" else "s"} • saving to ${defaultDownloadLocation()}",
-                    )
-                }
+            _uiState.update {
+                it.copy(
+                    currentScreen = AppScreen.Downloads,
+                    message = "Merging ${merges.size} item${if (merges.size == 1) "" else "s"} • saving to ${defaultDownloadLocation()}",
+                )
             }
             return
         }
@@ -774,18 +755,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 )
             }.onSuccess {
                 val totalQueued = standard.size + merges.size
-                if (uiState.value.isFromShare) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(appContext, "Started $totalQueued download${if (totalQueued == 1) "" else "s"}", Toast.LENGTH_LONG).show()
-                        _closeActivityEvents.tryEmit(Unit)
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            currentScreen = AppScreen.Downloads,
-                            message = "$totalQueued download${if (totalQueued == 1) "" else "s"} queued in ${defaultDownloadLocation()}",
-                        )
-                    }
+                _uiState.update {
+                    it.copy(
+                        currentScreen = AppScreen.Downloads,
+                        message = "$totalQueued download${if (totalQueued == 1) "" else "s"} queued in ${defaultDownloadLocation()}",
+                    )
                 }
             }.onFailure { error ->
                 _uiState.update {
@@ -1001,25 +975,18 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
 
             batchProcessingJob = null
-            if (uiState.value.isFromShare) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(appContext, "Queued $succeeded of ${selectedEntries.size} downloads", Toast.LENGTH_LONG).show()
-                    _closeActivityEvents.tryEmit(Unit)
-                }
-            } else {
-                _uiState.update {
-                    it.copy(
-                        currentScreen = AppScreen.Downloads,
-                        batchProgress = null,
-                        batch = null,
-                        selectedBatchIndices = emptySet(),
-                        message = buildString {
-                            append("Queued $succeeded of ${selectedEntries.size}")
-                            if (failed > 0) append(" • $failed failed")
-                            append(" • Saved to ${defaultDownloadLocation()}")
-                        },
-                    )
-                }
+            _uiState.update {
+                it.copy(
+                    currentScreen = AppScreen.Downloads,
+                    batchProgress = null,
+                    batch = null,
+                    selectedBatchIndices = emptySet(),
+                    message = buildString {
+                        append("Queued $succeeded of ${selectedEntries.size}")
+                        if (failed > 0) append(" • $failed failed")
+                        append(" • Saved to ${defaultDownloadLocation()}")
+                    },
+                )
             }
         }
     }
