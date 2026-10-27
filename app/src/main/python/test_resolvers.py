@@ -32,7 +32,7 @@ class TestGenericMediaResolver(unittest.TestCase):
     def test_ydl_options_with_and_without_cookies(self):
         opts_plain = _ydl_options()
         self.assertNotIn("cookiefile", opts_plain)
-        self.assertEqual(opts_plain["extractor_args"]["youtube"]["player_client"], ["android", "ios"])
+        self.assertEqual(opts_plain["extractor_args"]["youtube"]["player_client"], ["all"])
 
         with tempfile.NamedTemporaryFile("w", delete=False) as f:
             f.write("# Netscape HTTP Cookie File\n")
@@ -41,7 +41,7 @@ class TestGenericMediaResolver(unittest.TestCase):
         try:
             opts_cookie = _ydl_options(cookie_file_path=f_name)
             self.assertEqual(opts_cookie["cookiefile"], f_name)
-            self.assertEqual(opts_cookie["extractor_args"]["youtube"]["player_client"], ["android", "ios"])
+            self.assertEqual(opts_cookie["extractor_args"]["youtube"]["player_client"], ["all"])
         finally:
             if os.path.exists(f_name):
                 os.remove(f_name)
