@@ -1187,6 +1187,14 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun updateOnlineVideoPreview(enabled: Boolean) {
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                prefs[PreferenceKeys.enableOnlineVideoPreview] = enabled
+            }
+        }
+    }
+
     /**
      * Cancel an in-flight or queued download. Removes the partial file (for
      * system DownloadManager downloads) or aborts the merge service worker
@@ -1276,6 +1284,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         wifiOnly = prefs[PreferenceKeys.wifiOnly] ?: false,
                         completionNotifications = prefs[PreferenceKeys.completionNotifications] ?: true,
                         preferredQuality = QualityPreset.fromStorageKey(prefs[PreferenceKeys.preferredQuality]),
+                        enableOnlineVideoPreview = prefs[PreferenceKeys.enableOnlineVideoPreview] ?: true,
                         downloadLocation = defaultDownloadLocation(),
                         hasYouTubeCookies = CookieHelper.hasValidCookies(appContext),
                         youtubeCookiesLastModified = CookieHelper.getCookiesLastModified(appContext),

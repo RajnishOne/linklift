@@ -15,6 +15,7 @@ internal object PreferenceKeys {
     val wifiOnly = booleanPreferencesKey("wifi_only")
     val completionNotifications = booleanPreferencesKey("completion_notifications")
     val preferredQuality = stringPreferencesKey("preferred_quality")
+    val enableOnlineVideoPreview = booleanPreferencesKey("enable_online_video_preview")
     val downloadIds = stringSetPreferencesKey("download_ids")
     val downloadSourceUrls = stringPreferencesKey("download_source_urls")
 }

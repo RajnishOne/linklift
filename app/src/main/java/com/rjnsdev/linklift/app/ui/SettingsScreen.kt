@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -67,6 +68,7 @@ internal fun SettingsScreen(
     preferences: UserPreferences,
     onWifiOnlyChanged: (Boolean) -> Unit,
     onNotificationsChanged: (Boolean) -> Unit,
+    onOnlineVideoPreviewChanged: (Boolean) -> Unit,
     onPreferredPresetChanged: (QualityPreset) -> Unit,
     onSignInYouTube: () -> Unit,
     onImportCookiesFile: () -> Unit,
@@ -160,6 +162,16 @@ internal fun SettingsScreen(
                 subtitle = "Show notification when a download completes (requires permission on Android 13+).",
                 checked = preferences.completionNotifications,
                 onCheckedChange = onNotificationsChanged,
+            )
+        }
+
+        item {
+            SettingSwitchCard(
+                icon = Icons.Rounded.PlayCircleOutline,
+                title = "Stream online video preview",
+                subtitle = "Play video directly in the preview screen. Turn off to save mobile data.",
+                checked = preferences.enableOnlineVideoPreview,
+                onCheckedChange = onOnlineVideoPreviewChanged,
             )
         }
 

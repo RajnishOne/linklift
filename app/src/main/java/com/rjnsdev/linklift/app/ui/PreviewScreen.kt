@@ -29,6 +29,7 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircleOutline
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -44,7 +45,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,6 +110,7 @@ internal fun PreviewScreen(
             MediaHero(
                 item = currentItem,
                 selectedFormat = selectedFormat,
+                enableOnlineVideoPreview = uiState.settings.enableOnlineVideoPreview,
                 onFormatSelected = { fmt -> onFormatSelected(currentIndex, fmt.formatId) },
             )
         }
@@ -565,8 +571,12 @@ private fun CarouselItemRow(
 internal fun MediaHero(
     item: PreviewMediaItem,
     selectedFormat: MediaFormat? = null,
+    enableOnlineVideoPreview: Boolean = true,
     onFormatSelected: ((MediaFormat) -> Unit)? = null,
 ) {
+    var showPlayerOverride by remember(item.resolvedUrl) { mutableStateOf<Boolean?>(null) }
+    val showPlayer = showPlayerOverride ?: enableOnlineVideoPreview
+
     when (item.kind) {
         MediaKind.Image -> {
             Surface(
@@ -586,17 +596,108 @@ internal fun MediaHero(
             }
         }
 
-        MediaKind.Video -> VideoPreviewCard(
-            item = item,
-            selectedFormat = selectedFormat,
-            onFormatSelected = onFormatSelected,
-        )
+        MediaKind.Video -> {
+            if (showPlayer) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    VideoPreviewCard(
+                        item = item,
+                        selectedFormat = selectedFormat,
+                        onFormatSelected = onFormatSelected,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(
+                            onClick = { showPlayerOverride = false },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.VisibilityOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = LinkLiftTextSecondary,
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Hide video preview (save data)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = LinkLiftTextSecondary,
+                            )
+                        }
+                    }
+                }
+            } else {
+                VideoPlaceholderCard(
+                    item = item,
+                    onPlayPreview = { showPlayerOverride = true },
+                )
+            }
+        }
         MediaKind.Audio -> AudioPreviewCard(item = item)
         MediaKind.Unknown -> EmptyStateCard(
             icon = Icons.Rounded.ErrorOutline,
             title = "Preview unavailable",
             subtitle = "This source cannot be previewed yet.",
         )
+    }
+}
+
+@Composable
+private fun VideoPlaceholderCard(
+    item: PreviewMediaItem,
+    onPlayPreview: () -> Unit,
+) {
+    NeonCard {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.12f),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayCircleOutline,
+                    contentDescription = "Online Video Preview",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .size(36.dp),
+                )
+            }
+            Text(
+                text = "Online Video Player Hidden",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+            )
+            Text(
+                text = "Streaming is turned off to save mobile data. You can download directly below or stream the preview.",
+                style = MaterialTheme.typography.bodySmall,
+                color = LinkLiftTextSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Button(
+                onClick = onPlayPreview,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.15f),
+                    contentColor = Color.White,
+                ),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Stream Online Video Preview")
+            }
+        }
     }
 }
 

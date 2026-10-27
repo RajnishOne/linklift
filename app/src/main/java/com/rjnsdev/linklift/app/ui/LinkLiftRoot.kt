@@ -222,6 +222,7 @@ internal fun LinkLiftRoot(
                             preferences = uiState.settings,
                             onWifiOnlyChanged = viewModel::updateWifiOnly,
                             onNotificationsChanged = viewModel::updateCompletionNotifications,
+                            onOnlineVideoPreviewChanged = viewModel::updateOnlineVideoPreview,
                             onPreferredPresetChanged = viewModel::updatePreferredQuality,
                             onSignInYouTube = {
                                 youTubeAuthLauncher.launch(YouTubeAuthActivity.createIntent(context))

@@ -82,6 +82,7 @@ data class UserPreferences(
     val wifiOnly: Boolean = false,
     val completionNotifications: Boolean = true,
     val preferredQuality: QualityPreset = QualityPreset.BestQuality,
+    val enableOnlineVideoPreview: Boolean = true,
     val downloadLocation: String = "Downloads/LinkLift",
     val hasYouTubeCookies: Boolean = false,
     val youtubeCookiesLastModified: Long = 0L,
