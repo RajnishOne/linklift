@@ -530,6 +530,9 @@ private fun SettingSwitchCard(
 ) {
     NeonCard {
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCheckedChange(!checked) },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {

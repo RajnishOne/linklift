@@ -39,7 +39,7 @@ class ShareActivity : ComponentActivity() {
             LinkLiftTheme(darkTheme = true) {
                 ShareOverlaySheet(
                     viewModel = viewModel,
-                    onDismiss = { finish() },
+                    onDismiss = { dismissAndExit() },
                     ensureNotificationPermission = ::requestPostNotificationsIfNeeded,
                 )
             }
@@ -53,9 +53,13 @@ class ShareActivity : ComponentActivity() {
         handleIncomingShare(intent)
     }
 
+    private fun dismissAndExit() {
+        finishAndRemoveTask()
+    }
+
     private fun handleIncomingShare(intent: Intent?) {
         if (intent == null || intent.action != Intent.ACTION_SEND) {
-            finish()
+            dismissAndExit()
             return
         }
         val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
@@ -64,7 +68,7 @@ class ShareActivity : ComponentActivity() {
 
         val handled = viewModel.handleSharedText(sharedText, isFromShare = true)
         if (!handled) {
-            finish()
+            dismissAndExit()
         }
     }
 }
