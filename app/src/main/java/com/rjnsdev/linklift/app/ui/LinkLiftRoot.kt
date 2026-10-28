@@ -183,6 +183,8 @@ internal fun LinkLiftRoot(
                             onToggleItem = viewModel::toggleCarouselItem,
                             onSelectAllItems = viewModel::selectAllCarouselItems,
                             onClearItemSelection = viewModel::clearCarouselSelection,
+                            onSelectTargetSubfolder = viewModel::setTargetSubfolder,
+                            onCreateSubfolder = viewModel::addCustomSubfolder,
                         )
                         AppScreen.Batch -> BatchScreen(
                             uiState = uiState,
@@ -200,6 +202,8 @@ internal fun LinkLiftRoot(
                                 ensureNotificationPermission()
                                 viewModel.downloadSelectedBatchEntries()
                             },
+                            onSelectTargetSubfolder = viewModel::setTargetSubfolder,
+                            onCreateSubfolder = viewModel::addCustomSubfolder,
                         )
                         AppScreen.Downloads -> DownloadsScreen(
                             downloads = uiState.downloads,
@@ -231,6 +235,9 @@ internal fun LinkLiftRoot(
                                 }
                             },
                             onClearYouTubeCookies = viewModel::clearYouTubeCookies,
+                            onDefaultSubfolderChanged = viewModel::updateDefaultSubfolder,
+                            onCreateSubfolder = viewModel::addCustomSubfolder,
+                            onDeleteSubfolder = viewModel::removeCustomSubfolder,
                         )
                     }
                 }

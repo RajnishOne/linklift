@@ -32,11 +32,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.rjnsdev.linklift.app.ui.FolderSelectionDialog
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
@@ -51,12 +56,26 @@ internal fun BatchScreen(
     onClear: () -> Unit,
     onCancel: () -> Unit,
     onDownload: () -> Unit,
+    onSelectTargetSubfolder: (String) -> Unit,
+    onCreateSubfolder: (String) -> Unit,
 ) {
     val batch = uiState.batch ?: return
     val selected = uiState.selectedBatchIndices
     val selectedCount = selected.size
     val progress = uiState.batchProgress
     val isProcessing = progress?.isActive == true
+    var showFolderDialog by remember { mutableStateOf(false) }
+
+    if (showFolderDialog) {
+        FolderSelectionDialog(
+            title = "Choose Batch Folder",
+            selectedSubfolder = uiState.targetSubfolder,
+            availableSubfolders = uiState.settings.customSubfolders,
+            onSelectSubfolder = onSelectTargetSubfolder,
+            onCreateSubfolder = onCreateSubfolder,
+            onDismissRequest = { showFolderDialog = false },
+        )
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -202,6 +221,18 @@ internal fun BatchScreen(
                 isChecked = index in selected,
                 isProcessing = isProcessing,
                 onCheckedChange = { onToggleEntry(index) },
+            )
+        }
+
+        item {
+            val destinationPath = if (uiState.targetSubfolder.isBlank()) {
+                "Downloads/LinkLift"
+            } else {
+                "Downloads/LinkLift/${uiState.targetSubfolder}"
+            }
+            DownloadDestinationChip(
+                destinationPath = destinationPath,
+                onClick = { if (!isProcessing) showFolderDialog = true },
             )
         }
 

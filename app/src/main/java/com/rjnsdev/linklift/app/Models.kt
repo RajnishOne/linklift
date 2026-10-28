@@ -84,9 +84,14 @@ data class UserPreferences(
     val preferredQuality: QualityPreset = QualityPreset.BestQuality,
     val enableOnlineVideoPreview: Boolean = true,
     val downloadLocation: String = "Downloads/LinkLift",
+    val downloadSubfolder: String = "",
+    val customSubfolders: Set<String> = emptySet(),
     val hasYouTubeCookies: Boolean = false,
     val youtubeCookiesLastModified: Long = 0L,
-)
+) {
+    val effectiveDownloadPath: String
+        get() = if (downloadSubfolder.isBlank()) "Downloads/LinkLift" else "Downloads/LinkLift/${downloadSubfolder.trim().trim('/')}"
+}
 
 data class MediaFormat(
     val formatId: String,
@@ -203,6 +208,7 @@ data class LinkLiftUiState(
     val selectedBatchIndices: Set<Int> = emptySet(),
     val batchProgress: BatchProgress? = null,
     val settings: UserPreferences = UserPreferences(),
+    val targetSubfolder: String = "",
     val downloads: List<DownloadEntry> = emptyList(),
     val message: String? = null,
     val analysisStartedAt: Long? = null,

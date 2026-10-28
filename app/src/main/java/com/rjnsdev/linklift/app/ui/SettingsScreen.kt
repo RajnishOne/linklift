@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Notifications
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.rjnsdev.linklift.app.linkLiftListContentPadding
+import com.rjnsdev.linklift.app.ui.FolderSelectionDialog
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
@@ -74,8 +76,24 @@ internal fun SettingsScreen(
     onImportCookiesFile: () -> Unit,
     onImportCookiesClipboard: () -> Unit,
     onClearYouTubeCookies: () -> Unit,
+    onDefaultSubfolderChanged: (String) -> Unit,
+    onCreateSubfolder: (String) -> Unit,
+    onDeleteSubfolder: (String) -> Unit,
 ) {
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showFolderDialog by remember { mutableStateOf(false) }
+
+    if (showFolderDialog) {
+        FolderSelectionDialog(
+            title = "Default Download Location",
+            selectedSubfolder = preferences.downloadSubfolder,
+            availableSubfolders = preferences.customSubfolders,
+            onSelectSubfolder = onDefaultSubfolderChanged,
+            onCreateSubfolder = onCreateSubfolder,
+            onDeleteSubfolder = onDeleteSubfolder,
+            onDismissRequest = { showFolderDialog = false },
+        )
+    }
 
     if (showHelpDialog) {
         AlertDialog(
@@ -141,7 +159,8 @@ internal fun SettingsScreen(
             SettingToggleCard(
                 icon = Icons.Rounded.Folder,
                 title = "Download location",
-                subtitle = preferences.downloadLocation,
+                subtitle = preferences.effectiveDownloadPath,
+                onClick = { showFolderDialog = true },
             )
         }
 
@@ -489,8 +508,11 @@ private fun SettingToggleCard(
     icon: ImageVector,
     title: String,
     subtitle: String,
+    onClick: (() -> Unit)? = null,
 ) {
-    NeonCard {
+    NeonCard(
+        modifier = if (onClick != null) Modifier.clickable { onClick() } else Modifier,
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -514,6 +536,13 @@ private fun SettingToggleCard(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = LinkLiftTextSecondary,
+                )
+            }
+            if (onClick != null) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = LinkLiftTextMuted,
                 )
             }
         }

@@ -17,15 +17,18 @@ import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -50,9 +53,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.rjnsdev.linklift.app.ui.FolderSelectionDialog
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -84,8 +90,23 @@ internal fun PreviewScreen(
     onToggleItem: (Int) -> Unit,
     onSelectAllItems: () -> Unit,
     onClearItemSelection: () -> Unit,
+    onSelectTargetSubfolder: (String) -> Unit,
+    onCreateSubfolder: (String) -> Unit,
 ) {
     val preview = uiState.preview ?: return
+    var showFolderDialog by remember { mutableStateOf(false) }
+
+    if (showFolderDialog) {
+        FolderSelectionDialog(
+            title = "Choose Download Folder",
+            selectedSubfolder = uiState.targetSubfolder,
+            availableSubfolders = uiState.settings.customSubfolders,
+            onSelectSubfolder = onSelectTargetSubfolder,
+            onCreateSubfolder = onCreateSubfolder,
+            onDismissRequest = { showFolderDialog = false },
+        )
+    }
+
     val currentIndex = uiState.selectedPreviewIndex
     val currentItem = selectedPreviewItem(preview, currentIndex)
     val hasMultipleItems = preview.items.size > 1
@@ -240,6 +261,18 @@ internal fun PreviewScreen(
                 onAudioOnlyToggled = onAudioOnlyToggled,
                 onFormatSelected = { fmt -> onFormatSelected(currentIndex, fmt.formatId) },
                 preferredPreset = uiState.settings.preferredQuality,
+            )
+        }
+
+        item {
+            val destinationPath = if (uiState.targetSubfolder.isBlank()) {
+                "Downloads/LinkLift"
+            } else {
+                "Downloads/LinkLift/${uiState.targetSubfolder}"
+            }
+            DownloadDestinationChip(
+                destinationPath = destinationPath,
+                onClick = { showFolderDialog = true },
             )
         }
 
@@ -806,3 +839,67 @@ private fun AudioPreviewCard(item: PreviewMediaItem) {
         }
     }
 }
+
+@Composable
+internal fun DownloadDestinationChip(
+    destinationPath: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = LinkLiftCard.copy(alpha = 0.75f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.White.copy(alpha = 0.10f),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Folder,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .padding(6.dp)
+                        .size(16.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Save location",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LinkLiftTextSecondary,
+                )
+                Text(
+                    text = destinationPath,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = "Change",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = LinkLiftTextSecondary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+

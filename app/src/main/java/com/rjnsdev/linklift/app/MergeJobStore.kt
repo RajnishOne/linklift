@@ -43,6 +43,7 @@ data class MergeJobRecord(
     val errorMessage: String?,
     val updatedAt: Long,
     val mimeType: String,
+    val subfolder: String? = null,
 ) {
     val totalBytes: Long? get() {
         val v = videoTotal.takeIf { it > 0L }
@@ -211,6 +212,7 @@ object MergeJobStore {
             obj.put("errorMessage", job.errorMessage ?: JSONObject.NULL)
             obj.put("updatedAt", job.updatedAt)
             obj.put("mimeType", job.mimeType)
+            obj.put("subfolder", job.subfolder ?: JSONObject.NULL)
             array.put(obj)
         }
         return array.toString()
@@ -255,6 +257,7 @@ object MergeJobStore {
                             },
                             updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
                             mimeType = obj.optString("mimeType").ifBlank { "video/mp4" },
+                            subfolder = obj.optString("subfolder").takeIf { it.isNotBlank() && it != "null" },
                         ),
                     )
                 }

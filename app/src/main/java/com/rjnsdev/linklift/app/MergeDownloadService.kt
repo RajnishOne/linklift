@@ -75,10 +75,20 @@ class MergeDownloadService : Service() {
         const val EXTRA_DESCRIPTION = "description"
         const val EXTRA_SOURCE_URL = "source_url"
         const val EXTRA_MIME_TYPE = "mime_type"
+        const val EXTRA_SUBFOLDER = "subfolder"
 
         private const val DOWNLOAD_MAX_ATTEMPTS = 4
         private const val DOWNLOAD_RETRY_BASE_MS = 1_000L
         private const val DOWNLOAD_RETRY_MAX_MS = 8_000L
+
+        fun sanitizeSubfolder(name: String?): String {
+            if (name.isNullOrBlank()) return ""
+            return name.trim()
+                .trim('/', '\\', '.')
+                .replace(Regex("""[\\:*?"<>|]+"""), "_")
+                .replace(Regex("""/+"""), "/")
+                .take(80)
+        }
 
         fun enqueue(
             context: Context,
@@ -96,6 +106,7 @@ class MergeDownloadService : Service() {
             audioExt: String,
             audioHeaders: Map<String, String>,
             audioSize: Long,
+            subfolder: String? = null,
         ) {
             val intent = Intent(context, MergeDownloadService::class.java).apply {
                 action = ACTION_START_MERGE
@@ -105,6 +116,7 @@ class MergeDownloadService : Service() {
                 putExtra(EXTRA_DESCRIPTION, description)
                 putExtra(EXTRA_OUTPUT_FILENAME, outputFileName)
                 putExtra(EXTRA_MIME_TYPE, mimeType)
+                putExtra(EXTRA_SUBFOLDER, sanitizeSubfolder(subfolder))
                 putExtra(EXTRA_VIDEO_URL, videoUrl)
                 putExtra(EXTRA_VIDEO_EXT, videoExt)
                 putExtra(EXTRA_VIDEO_SIZE, videoSize)
@@ -198,6 +210,7 @@ class MergeDownloadService : Service() {
         val audioSize = intent.getLongExtra(EXTRA_AUDIO_SIZE, 0L)
         val videoHeaders = bundleToHeaders(intent.getBundleExtra(EXTRA_VIDEO_HEADERS))
         val audioHeaders = bundleToHeaders(intent.getBundleExtra(EXTRA_AUDIO_HEADERS))
+        val subfolder = sanitizeSubfolder(intent.getStringExtra(EXTRA_SUBFOLDER)).takeIf { it.isNotBlank() }
 
         val initial = MergeJobRecord(
             id = jobId,
@@ -214,6 +227,7 @@ class MergeDownloadService : Service() {
             errorMessage = null,
             updatedAt = System.currentTimeMillis(),
             mimeType = mimeType,
+            subfolder = subfolder,
         )
         MergeJobStore.upsert(applicationContext, initial)
         startForegroundIfNeeded(initial)
@@ -235,6 +249,7 @@ class MergeDownloadService : Service() {
                         audioUrl = audioUrl,
                         audioExt = audioExt,
                         audioHeaders = audioHeaders,
+                        subfolder = subfolder,
                     )
                     onJobFinished(jobId)
                 }
@@ -281,6 +296,7 @@ class MergeDownloadService : Service() {
         audioUrl: String,
         audioExt: String,
         audioHeaders: Map<String, String>,
+        subfolder: String? = null,
     ) {
         val tempDir = File(applicationContext.cacheDir, "merge").apply { mkdirs() }
         val videoTemp = File(tempDir, "${jobId}_video.${videoExt}")
@@ -360,6 +376,7 @@ class MergeDownloadService : Service() {
                 fileName = outputFileName,
                 mimeType = mimeType,
                 description = description,
+                subfolder = subfolder,
             )
             updateState(jobId) {
                 it.copy(
@@ -729,11 +746,12 @@ class MergeDownloadService : Service() {
         fileName: String,
         mimeType: String,
         description: String,
+        subfolder: String? = null,
     ): Uri {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            publishViaMediaStore(source, fileName, mimeType, description)
+            publishViaMediaStore(source, fileName, mimeType, description, subfolder)
         } else {
-            publishViaLegacyFile(source, fileName)
+            publishViaLegacyFile(source, fileName, subfolder)
         }
     }
 
@@ -742,13 +760,20 @@ class MergeDownloadService : Service() {
         fileName: String,
         mimeType: String,
         description: String,
+        subfolder: String? = null,
     ): Uri {
+        val clean = sanitizeSubfolder(subfolder)
+        val relativePath = if (clean.isBlank()) {
+            "${Environment.DIRECTORY_DOWNLOADS}/LinkLift"
+        } else {
+            "${Environment.DIRECTORY_DOWNLOADS}/LinkLift/$clean"
+        }
         val resolver = applicationContext.contentResolver
         val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, fileName)
             put(MediaStore.Downloads.MIME_TYPE, mimeType)
-            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/LinkLift")
+            put(MediaStore.Downloads.RELATIVE_PATH, relativePath)
             if (description.isNotBlank()) {
                 put(MediaStore.MediaColumns.TITLE, description.take(120))
             }
@@ -771,9 +796,12 @@ class MergeDownloadService : Service() {
     }
 
     @Suppress("DEPRECATION")
-    private fun publishViaLegacyFile(source: File, fileName: String): Uri {
+    private fun publishViaLegacyFile(source: File, fileName: String, subfolder: String? = null): Uri {
+        val clean = sanitizeSubfolder(subfolder)
         val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val targetDir = File(dir, "LinkLift").apply { mkdirs() }
+        val baseDir = File(dir, "LinkLift")
+        val targetDir = if (clean.isBlank()) baseDir else File(baseDir, clean)
+        targetDir.mkdirs()
         val target = File(targetDir, fileName)
         FileInputStream(source).use { input ->
             FileOutputStream(target).use { out -> input.copyTo(out) }

@@ -420,6 +420,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     analyzeLink(rawUrl = rawUrl)
                     return@launch
                 }
+                val suggestedSubfolder = MergeDownloadService.sanitizeSubfolder(batch.title.ifBlank { batch.uploader })
+                    .takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
                 _uiState.update {
                     it.copy(
                         currentScreen = AppScreen.Batch,
@@ -428,6 +430,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         batchProgress = null,
                         preview = null,
                         analysisLatencyMs = latency,
+                        targetSubfolder = suggestedSubfolder,
                     )
                 }
             } catch (cancellation: CancellationException) {
@@ -456,6 +459,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun showBatchPreview(batch: LinkBatch) {
+        val suggestedSubfolder = MergeDownloadService.sanitizeSubfolder(batch.title.ifBlank { batch.uploader })
+            .takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Batch,
@@ -465,6 +470,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 preview = null,
                 analysisStartedAt = null,
                 analysisLatencyMs = null,
+                targetSubfolder = suggestedSubfolder,
             )
         }
     }
@@ -525,6 +531,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         batch = null,
                         selectedBatchIndices = emptySet(),
                         batchProgress = null,
+                        targetSubfolder = current.settings.downloadSubfolder,
                         analysisLatencyMs = latency,
                     )
                 }
@@ -630,6 +637,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             val finalFormat = refreshedFormat
             val finalItem = refreshedItem
 
+            val currentTarget = uiState.value.targetSubfolder.takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
+            val downloadLoc = defaultDownloadLocation(currentTarget)
             val useMergeService = finalFormat != null && shouldDownloadWithMergeService(finalFormat, sourceUrl)
 
             if (useMergeService) {
@@ -637,13 +646,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     sourceUrl = sourceUrl,
                     item = finalItem,
                     format = finalFormat,
+                    subfolder = currentTarget,
                 )
-                _uiState.update {
-                    it.copy(
-                        currentScreen = AppScreen.Downloads,
-                        message = "Download queued in ${defaultDownloadLocation()}",
-                    )
-                }
                 return@launch
             }
 
@@ -661,12 +665,14 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     sourceUrl = sourceUrl,
                     items = listOf(resolved),
                     formats = listOf(finalFormat),
+                    subfolder = currentTarget,
                 )
             }.onSuccess {
                 _uiState.update {
                     it.copy(
                         currentScreen = AppScreen.Downloads,
-                        message = "Download queued in ${defaultDownloadLocation()}",
+                        message = "Download queued in $downloadLoc",
+                        targetSubfolder = it.settings.downloadSubfolder,
                     )
                 }
             }.onFailure { error ->
@@ -681,6 +687,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         sourceUrl: String,
         item: PreviewMediaItem,
         format: MediaFormat,
+        subfolder: String? = null,
     ) {
         val audioFormat = format.mergeAudio // might be null
         val outputExt = if (format.isAudioOnly) {
@@ -704,6 +711,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             mimeType = outputMime,
         )
         val jobId = "merge-${System.currentTimeMillis()}-${(0..9999).random()}"
+        val effectiveSubfolder = subfolder ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
+        val downloadLoc = defaultDownloadLocation(effectiveSubfolder)
 
         MergeDownloadService.enqueue(
             context = appContext,
@@ -724,13 +733,15 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             audioExt = audioFormat?.ext ?: (if (format.isAudioOnly) format.ext else ""),
             audioHeaders = audioFormat?.httpHeaders ?: (if (format.isAudioOnly) format.httpHeaders else emptyMap()),
             audioSize = audioFormat?.fileSizeBytes ?: (if (format.isAudioOnly) (format.fileSizeBytes ?: 0L) else 0L),
+            subfolder = effectiveSubfolder,
         )
 
         val actionLabel = if (format.requiresMerge) "Merging" else "Downloading"
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Downloads,
-                message = "$actionLabel ${format.label} • saving to ${defaultDownloadLocation()}",
+                message = "$actionLabel ${format.label} • saving to $downloadLoc",
+                targetSubfolder = it.settings.downloadSubfolder,
             )
         }
     }
@@ -752,6 +763,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
 
         val state = uiState.value
+        val currentTarget = state.targetSubfolder.takeIf { it.isNotBlank() } ?: state.settings.downloadSubfolder
+        val downloadLoc = defaultDownloadLocation(currentTarget)
         val selectedIndices = state.selectedItemIndices
             .filter { it in preview.items.indices }
             .toSortedSet()
@@ -786,6 +799,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 sourceUrl = preview.sourceUrl,
                 item = item,
                 format = format,
+                subfolder = currentTarget,
             )
         }
 
@@ -793,7 +807,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             _uiState.update {
                 it.copy(
                     currentScreen = AppScreen.Downloads,
-                    message = "Merging ${merges.size} item${if (merges.size == 1) "" else "s"} • saving to ${defaultDownloadLocation()}",
+                    message = "Merging ${merges.size} item${if (merges.size == 1) "" else "s"} • saving to $downloadLoc",
+                    targetSubfolder = it.settings.downloadSubfolder,
                 )
             }
             return
@@ -806,13 +821,15 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     sourceUrl = preview.sourceUrl,
                     items = standard.map { it.item },
                     formats = standard.map { it.format },
+                    subfolder = currentTarget,
                 )
             }.onSuccess {
                 val totalQueued = standard.size + merges.size
                 _uiState.update {
                     it.copy(
                         currentScreen = AppScreen.Downloads,
-                        message = "$totalQueued download${if (totalQueued == 1) "" else "s"} queued in ${defaultDownloadLocation()}",
+                        message = "$totalQueued download${if (totalQueued == 1) "" else "s"} queued in $downloadLoc",
+                        targetSubfolder = it.settings.downloadSubfolder,
                     )
                 }
             }.onFailure { error ->
@@ -935,6 +952,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
+        val batchFolder = state.targetSubfolder.takeIf { it.isNotBlank() } ?: state.settings.downloadSubfolder
+        val batchLocation = defaultDownloadLocation(batchFolder)
+
         batchProcessingJob?.cancel()
         batchProcessingJob = viewModelScope.launch(Dispatchers.IO) {
             _uiState.update {
@@ -988,6 +1008,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                                 sourceUrl = entry.sourceUrl,
                                 item = primary,
                                 format = chosen,
+                                subfolder = batchFolder,
                             )
                         }.isSuccess
                     } else {
@@ -998,6 +1019,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                                 sourceUrl = entry.sourceUrl,
                                 items = listOf(resolved),
                                 formats = listOf(chosen),
+                                subfolder = batchFolder,
                             )
                         }.isSuccess
                     }
@@ -1035,10 +1057,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     batchProgress = null,
                     batch = null,
                     selectedBatchIndices = emptySet(),
+                    targetSubfolder = it.settings.downloadSubfolder,
                     message = buildString {
                         append("Queued $succeeded of ${selectedEntries.size}")
                         if (failed > 0) append(" • $failed failed")
-                        append(" • Saved to ${defaultDownloadLocation()}")
+                        append(" • Saved to $batchLocation")
                     },
                 )
             }
@@ -1170,8 +1193,17 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         sourceUrl: String,
         items: List<PreviewMediaItem>,
         formats: List<MediaFormat?> = emptyList(),
+        subfolder: String? = null,
     ) {
+        val cleanSubfolder = MergeDownloadService.sanitizeSubfolder(
+            subfolder ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
+        )
         items.forEachIndexed { index, item ->
+            val destinationSubpath = if (cleanSubfolder.isBlank()) {
+                "LinkLift/${item.fileName}"
+            } else {
+                "LinkLift/$cleanSubfolder/${item.fileName}"
+            }
             val request = DownloadManager.Request(Uri.parse(item.resolvedUrl))
                 .setTitle(item.title)
                 .setDescription(
@@ -1192,7 +1224,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 .setAllowedOverMetered(!uiState.value.settings.wifiOnly)
                 .setDestinationInExternalPublicDir(
                     Environment.DIRECTORY_DOWNLOADS,
-                    "LinkLift/${item.fileName}",
+                    destinationSubpath,
                 )
 
             val headers = formats.getOrNull(index)?.httpHeaders.orEmpty()
@@ -1255,6 +1287,50 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             appContext.linkLiftDataStore.edit { prefs ->
                 prefs[PreferenceKeys.enableOnlineVideoPreview] = enabled
+            }
+        }
+    }
+
+    fun setTargetSubfolder(subfolder: String) {
+        _uiState.update { it.copy(targetSubfolder = MergeDownloadService.sanitizeSubfolder(subfolder)) }
+    }
+
+    fun updateDefaultSubfolder(subfolder: String) {
+        val clean = MergeDownloadService.sanitizeSubfolder(subfolder)
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                prefs[PreferenceKeys.downloadSubfolder] = clean
+                if (clean.isNotBlank()) {
+                    val existing = prefs[PreferenceKeys.customSubfolders]?.toMutableSet() ?: mutableSetOf()
+                    existing.add(clean)
+                    prefs[PreferenceKeys.customSubfolders] = existing
+                }
+            }
+        }
+    }
+
+    fun addCustomSubfolder(subfolder: String) {
+        val clean = MergeDownloadService.sanitizeSubfolder(subfolder)
+        if (clean.isBlank()) return
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                val existing = prefs[PreferenceKeys.customSubfolders]?.toMutableSet() ?: mutableSetOf()
+                existing.add(clean)
+                prefs[PreferenceKeys.customSubfolders] = existing
+            }
+        }
+    }
+
+    fun removeCustomSubfolder(subfolder: String) {
+        val clean = MergeDownloadService.sanitizeSubfolder(subfolder)
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                val existing = prefs[PreferenceKeys.customSubfolders]?.toMutableSet() ?: mutableSetOf()
+                existing.remove(clean)
+                prefs[PreferenceKeys.customSubfolders] = existing
+                if (prefs[PreferenceKeys.downloadSubfolder] == clean) {
+                    prefs[PreferenceKeys.downloadSubfolder] = ""
+                }
             }
         }
     }
@@ -1344,18 +1420,27 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             appContext.linkLiftDataStore.data
                 .catch { emit(emptyPreferences()) }
                 .map { prefs ->
+                    val subfolder = prefs[PreferenceKeys.downloadSubfolder].orEmpty()
+                    val customFolders = prefs[PreferenceKeys.customSubfolders].orEmpty()
                     UserPreferences(
                         wifiOnly = prefs[PreferenceKeys.wifiOnly] ?: false,
                         completionNotifications = prefs[PreferenceKeys.completionNotifications] ?: true,
                         preferredQuality = QualityPreset.fromStorageKey(prefs[PreferenceKeys.preferredQuality]),
                         enableOnlineVideoPreview = prefs[PreferenceKeys.enableOnlineVideoPreview] ?: true,
-                        downloadLocation = defaultDownloadLocation(),
+                        downloadLocation = defaultDownloadLocation(subfolder),
+                        downloadSubfolder = subfolder,
+                        customSubfolders = customFolders,
                         hasYouTubeCookies = CookieHelper.hasValidCookies(appContext),
                         youtubeCookiesLastModified = CookieHelper.getCookiesLastModified(appContext),
                     )
                 }
                 .collect { settings ->
-                    _uiState.update { it.copy(settings = settings) }
+                    _uiState.update { state ->
+                        state.copy(
+                            settings = settings,
+                            targetSubfolder = if (state.targetSubfolder.isBlank()) settings.downloadSubfolder else state.targetSubfolder,
+                        )
+                    }
                 }
         }
     }
@@ -2813,7 +2898,16 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         return buildSafeFileName(null, null, fallbackUrl = url, mimeType = mimeType)
     }
 
-    private fun defaultDownloadLocation(): String = "Downloads/LinkLift"
+    fun defaultDownloadLocation(subfolder: String? = null): String {
+        val target = if (subfolder != null) {
+            subfolder
+        } else {
+            val state = runCatching { _uiState.value }.getOrNull()
+            state?.targetSubfolder?.takeIf { it.isNotBlank() } ?: state?.settings?.downloadSubfolder
+        }
+        val clean = MergeDownloadService.sanitizeSubfolder(target)
+        return if (clean.isBlank()) "Downloads/LinkLift" else "Downloads/LinkLift/$clean"
+    }
 
     fun refreshCookieStatus() {
         val hasCookies = CookieHelper.hasValidCookies(appContext)

@@ -18,4 +18,6 @@ internal object PreferenceKeys {
     val enableOnlineVideoPreview = booleanPreferencesKey("enable_online_video_preview")
     val downloadIds = stringSetPreferencesKey("download_ids")
     val downloadSourceUrls = stringPreferencesKey("download_source_urls")
+    val downloadSubfolder = stringPreferencesKey("download_subfolder")
+    val customSubfolders = stringSetPreferencesKey("custom_subfolders")
 }
