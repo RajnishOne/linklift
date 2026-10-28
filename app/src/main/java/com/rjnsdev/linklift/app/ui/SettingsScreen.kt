@@ -168,8 +168,8 @@ internal fun SettingsScreen(
         item {
             SettingSwitchCard(
                 icon = Icons.Rounded.PlayCircleOutline,
-                title = "Stream online video preview",
-                subtitle = "Play video directly in the preview screen. Turn off to save mobile data.",
+                title = "Video preview",
+                subtitle = "Stream video directly in the preview screen. Turn off to hide player and show video thumbnail.",
                 checked = preferences.enableOnlineVideoPreview,
                 onCheckedChange = onOnlineVideoPreviewChanged,
             )

@@ -504,6 +504,7 @@ def _entry_payload(entry, fallback_title=None, fallback_description=None):
         "platform": extractor,
         "duration_ms": duration_ms,
         "formats": formats,
+        "thumbnail": entry.get("thumbnail"),
     }
 
 

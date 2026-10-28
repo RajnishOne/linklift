@@ -1,5 +1,6 @@
 package com.rjnsdev.linklift.app
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -110,7 +111,7 @@ internal fun PreviewScreen(
             MediaHero(
                 item = currentItem,
                 selectedFormat = selectedFormat,
-                enableOnlineVideoPreview = true,
+                enableOnlineVideoPreview = uiState.settings.enableOnlineVideoPreview,
                 onFormatSelected = { fmt -> onFormatSelected(currentIndex, fmt.formatId) },
             )
         }
@@ -628,7 +629,7 @@ internal fun MediaHero(
                     }
                 }
             } else {
-                VideoPlaceholderCard(
+                VideoThumbnailCard(
                     item = item,
                     onPlayPreview = { showPlayerOverride = true },
                 )
@@ -644,58 +645,76 @@ internal fun MediaHero(
 }
 
 @Composable
-private fun VideoPlaceholderCard(
+private fun VideoThumbnailCard(
     item: PreviewMediaItem,
     onPlayPreview: () -> Unit,
 ) {
-    NeonCard {
-        Column(
+    val thumbnailModel = item.thumbnailUrl
+        ?: extractYouTubeThumbnailUrl(item.resolvedUrl)
+        ?: item.resolvedUrl
+
+    Surface(
+        shape = RoundedCornerShape(30.dp),
+        color = LinkLiftCard.copy(alpha = 0.9f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPlayPreview() },
+    ) {
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .requiredHeight(300.dp),
+            contentAlignment = Alignment.Center,
         ) {
+            AsyncImage(
+                model = thumbnailModel,
+                contentDescription = item.title,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(30.dp)),
+                contentScale = ContentScale.Crop,
+            )
+
+            // Dim gradient overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.32f)),
+            )
+
+            // Frosted Play Button in center
             Surface(
                 shape = CircleShape,
-                color = Color.White.copy(alpha = 0.12f),
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.PlayCircleOutline,
-                    contentDescription = "Online Video Preview",
-                    tint = Color.White,
-                    modifier = Modifier
-                        .padding(18.dp)
-                        .size(36.dp),
-                )
-            }
-            Text(
-                text = "Online Video Player Hidden",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-            )
-            Text(
-                text = "Streaming is turned off to save mobile data. You can download directly below or stream the preview.",
-                style = MaterialTheme.typography.bodySmall,
-                color = LinkLiftTextSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Button(
-                onClick = onPlayPreview,
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.15f),
-                    contentColor = Color.White,
-                ),
+                color = Color.Black.copy(alpha = 0.65f),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.85f)),
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
+                    contentDescription = "Play Video Preview",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .size(38.dp),
                 )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Stream Online Video Preview")
+            }
+
+            // Duration badge at bottom right
+            item.durationMs?.let { dur ->
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.75f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(14.dp),
+                ) {
+                    Text(
+                        text = formatDuration(dur),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
             }
         }
     }

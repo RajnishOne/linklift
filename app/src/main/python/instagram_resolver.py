@@ -19,6 +19,7 @@ def _video_payload(post):
         "mime_type": "video/mp4",
         "title": _build_title(post),
         "description": "Resolved with Instaloader from a public Instagram media link",
+        "thumbnail": getattr(post, "url", None),
     }
 
 
@@ -29,6 +30,7 @@ def _image_payload(post):
         "mime_type": "image/jpeg",
         "title": _build_title(post),
         "description": "Resolved with Instaloader from a public Instagram media link",
+        "thumbnail": getattr(post, "url", None),
     }
 
 
@@ -40,6 +42,7 @@ def _sidecar_node_payload(post, node):
             "mime_type": "video/mp4",
             "title": _build_title(post),
             "description": "Resolved with Instaloader from a public Instagram carousel",
+            "thumbnail": getattr(node, "display_url", None),
         }
 
     display_url = getattr(node, "display_url", None)
@@ -50,6 +53,7 @@ def _sidecar_node_payload(post, node):
             "mime_type": "image/jpeg",
             "title": _build_title(post),
             "description": "Resolved with Instaloader from a public Instagram carousel",
+            "thumbnail": display_url,
         }
 
     return None

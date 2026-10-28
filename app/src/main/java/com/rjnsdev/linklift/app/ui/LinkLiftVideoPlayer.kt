@@ -114,6 +114,7 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
+import com.rjnsdev.linklift.app.util.ChunkedHttpDataSource
 import com.rjnsdev.linklift.app.util.CookieHelper
 
 data class ResizeModeOption(
@@ -196,52 +197,18 @@ fun LinkLiftVideoPlayer(
             }
         }
 
-        val chunkSize = 2 * 1024 * 1024L
         val okHttpClient = OkHttpClient.Builder()
             .followRedirects(true)
             .followSslRedirects(true)
-            .addInterceptor { chain ->
-                val request = chain.request()
-                val isGv = request.url.host.contains("googlevideo.com")
-                val finalRequest = if (isGv) {
-                    val clen = request.url.queryParameter("clen")?.toLongOrNull()
-                    val maxEnd = if (clen != null && clen > 0L) clen - 1L else Long.MAX_VALUE
-
-                    val rangeHeader = request.header("Range")
-                    val boundedRange = if (rangeHeader != null && rangeHeader.startsWith("bytes=")) {
-                        val spec = rangeHeader.removePrefix("bytes=").trim()
-                        val parts = spec.split("-")
-                        val start = parts[0].toLongOrNull() ?: 0L
-                        val safeStart = if (clen != null && clen > 0L) start.coerceAtMost(maxEnd) else start
-                        val requestedEnd = if (parts.size > 1 && parts[1].isNotBlank()) parts[1].toLongOrNull() else null
-                        val targetEnd = if (requestedEnd != null) {
-                            minOf(requestedEnd, safeStart + chunkSize - 1).coerceAtMost(maxEnd)
-                        } else {
-                            (safeStart + chunkSize - 1).coerceAtMost(maxEnd)
-                        }
-                        val clampedEnd = maxOf(safeStart, targetEnd)
-                        "bytes=$safeStart-$clampedEnd"
-                    } else {
-                        val targetEnd = minOf(chunkSize - 1, maxEnd)
-                        "bytes=0-$targetEnd"
-                    }
-                    request.newBuilder()
-                        .header("Range", boundedRange)
-                        .build()
-                } else {
-                    request
-                }
-                chain.proceed(finalRequest)
-            }
             .build()
 
-        val dataSourceFactory = OkHttpDataSource.Factory(okHttpClient).apply {
+        val okHttpDataSourceFactory = OkHttpDataSource.Factory(okHttpClient).apply {
             setUserAgent(effectiveUserAgent)
             if (sanitizedHeaders.isNotEmpty()) {
                 setDefaultRequestProperties(sanitizedHeaders)
             }
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(ChunkedHttpDataSource.Factory(okHttpDataSourceFactory))
         builder.setMediaSourceFactory(mediaSourceFactory)
 
         val player = builder.build()
@@ -258,7 +225,7 @@ fun LinkLiftVideoPlayer(
 
         player.setMediaSource(finalSource)
         player.repeatMode = Player.REPEAT_MODE_OFF
-        if (savedPositionMs > 0L) {
+        if (!isGoogleVideo && savedPositionMs > 0L) {
             player.seekTo(savedPositionMs)
         }
         player.prepare()
@@ -273,39 +240,24 @@ fun LinkLiftVideoPlayer(
         val listener = object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 android.util.Log.e("LinkLiftVideoPlayer", "ExoPlayer error [${error.errorCodeName} / ${error.errorCode}]: ${error.message}", error)
-                if (!audioUri.isNullOrBlank() && !didFallbackToVideoOnly) {
+                val hasYouTubeCookies = CookieHelper.hasValidCookies(context)
+                val isGoogleVideo = mediaUri.contains("googlevideo.com") || (audioUri?.contains("googlevideo.com") == true)
+                val shouldMergeAudio = !audioUri.isNullOrBlank() && (!isGoogleVideo || hasYouTubeCookies)
+                if (shouldMergeAudio && !didFallbackToVideoOnly) {
                     didFallbackToVideoOnly = true
                     android.util.Log.w("LinkLiftVideoPlayer", "Audio merge failed; falling back to video-only preview")
                     val fallbackSource = exoPlayer.mediaMetadata.let {
                         val videoItem = MediaItem.fromUri(mediaUri)
-                        // Re-create video-only source
-                        DefaultMediaSourceFactory(
-                            OkHttpDataSource.Factory(
-                                OkHttpClient.Builder()
-                                    .followRedirects(true)
-                                    .followSslRedirects(true)
-                                    .addInterceptor { chain ->
-                                        val req = chain.request()
-                                        val isGv = req.url.host.contains("googlevideo.com")
-                                        val newReq = if (isGv) {
-                                            val clen = req.url.queryParameter("clen")?.toLongOrNull()
-                                            val maxEnd = if (clen != null && clen > 0L) clen - 1L else Long.MAX_VALUE
-                                            val rh = req.header("Range")
-                                            val spec = rh?.removePrefix("bytes=")?.trim()
-                                            val start = spec?.substringBefore('-')?.toLongOrNull() ?: 0L
-                                            val safeStart = if (clen != null && clen > 0L) start.coerceAtMost(maxEnd) else start
-                                            val end = minOf(safeStart + 2 * 1024 * 1024L - 1, maxEnd)
-                                            req.newBuilder().header("Range", "bytes=$safeStart-$end").build()
-                                        } else req
-                                        chain.proceed(newReq)
-                                    }
-                                    .build()
-                            ).apply {
-                                val extractionUserAgent = httpHeaders.entries
-                                    .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
-                                setUserAgent(extractionUserAgent ?: linkLiftUserAgent)
-                            }
-                        ).createMediaSource(videoItem)
+                        val okHttpClient = OkHttpClient.Builder()
+                            .followRedirects(true)
+                            .followSslRedirects(true)
+                            .build()
+                        val extractionUserAgent = httpHeaders.entries
+                            .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
+                        val okHttpFactory = OkHttpDataSource.Factory(okHttpClient).apply {
+                            setUserAgent(extractionUserAgent ?: linkLiftUserAgent)
+                        }
+                        DefaultMediaSourceFactory(ChunkedHttpDataSource.Factory(okHttpFactory)).createMediaSource(videoItem)
                     }
                     exoPlayer.setMediaSource(fallbackSource)
                     exoPlayer.prepare()

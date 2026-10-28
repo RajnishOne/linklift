@@ -136,3 +136,27 @@ internal fun isInstagramUrl(url: String): Boolean {
 internal fun isSupportedMediaUrl(url: String): Boolean {
     return isYouTubeUrl(url) || isInstagramUrl(url)
 }
+
+internal fun extractYouTubeVideoId(url: String): String? {
+    val host = getUriHost(url).lowercase(Locale.ROOT).removePrefix("www.")
+    if (host == "youtu.be" || host.endsWith(".youtu.be")) {
+        return getUriPath(url).trimStart('/').takeIf { it.isNotBlank() }
+    }
+    if (host.contains("youtube.com")) {
+        val vParam = getUriQueryParam(url, "v")
+        if (!vParam.isNullOrBlank()) return vParam
+        val path = getUriPath(url)
+        if (path.startsWith("/shorts/")) {
+            return path.removePrefix("/shorts/").substringBefore('/').substringBefore('?')
+        }
+        if (path.startsWith("/embed/")) {
+            return path.removePrefix("/embed/").substringBefore('/').substringBefore('?')
+        }
+    }
+    return null
+}
+
+internal fun extractYouTubeThumbnailUrl(url: String): String? {
+    val id = extractYouTubeVideoId(url) ?: return null
+    return "https://i.ytimg.com/vi/$id/hqdefault.jpg"
+}

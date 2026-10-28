@@ -1647,6 +1647,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             fallbackUrl = previewFormat.mediaUrl,
             mimeType = previewFormat.mimeType,
         )
+        val thumbnail = json.optString("thumbnail").takeIf { it.isNotBlank() }
+            ?: extractYouTubeThumbnailUrl(previewFormat.mediaUrl)
         return PreviewMediaItem(
             resolvedUrl = previewFormat.mediaUrl,
             title = sanitizedTitle,
@@ -1658,6 +1660,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             resolution = resolution,
             fileName = fileName,
             formats = formats,
+            thumbnailUrl = thumbnail,
         )
     }
 
@@ -1788,6 +1791,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             fileName = primaryItem.fileName,
             isDirectLink = isDirectLink,
             items = items,
+            thumbnailUrl = primaryItem.thumbnailUrl,
         )
     }
 
@@ -1819,6 +1823,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             descriptionHint = descriptionHint,
             sourceLabel = sourceLabel,
             isDirectLink = isDirectLink,
+            thumbnailUrlHint = extractYouTubeThumbnailUrl(sourceUrl),
         )
 
         return buildMediaPreviewFromItems(
@@ -1840,6 +1845,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         descriptionHint: String?,
         sourceLabel: String,
         isDirectLink: Boolean,
+        thumbnailUrlHint: String? = null,
     ): PreviewMediaItem {
         val kind = explicitKind.takeIf { it != MediaKind.Unknown }
             ?: MediaKind.fromMimeType(mimeType, resolvedUrl)
@@ -1887,6 +1893,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             durationMs = metadata.durationMs,
             resolution = metadata.resolution,
             fileName = fileName,
+            thumbnailUrl = thumbnailUrlHint ?: extractYouTubeThumbnailUrl(resolvedUrl),
         )
     }
 

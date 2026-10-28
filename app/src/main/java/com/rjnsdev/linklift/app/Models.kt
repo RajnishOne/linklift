@@ -124,6 +124,7 @@ data class PreviewMediaItem(
     val resolution: String?,
     val fileName: String,
     val formats: List<MediaFormat> = emptyList(),
+    val thumbnailUrl: String? = null,
 )
 
 data class MediaPreview(
@@ -140,6 +141,7 @@ data class MediaPreview(
     val fileName: String,
     val isDirectLink: Boolean = true,
     val items: List<PreviewMediaItem> = emptyList(),
+    val thumbnailUrl: String? = null,
 )
 
 data class DownloadEntry(
