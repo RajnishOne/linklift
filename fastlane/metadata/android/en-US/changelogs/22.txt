@@ -1,0 +1,5 @@
+- Added quick download popup overlay when sharing links from other apps
+- Enhanced video preview player with thumbnail loading, chunked streaming, and HTTP 403 error recovery
+- Added data-saver option to toggle online video preview on or off
+- Full video quality options (1080p, 720p, 480p) now accessible in download menu
+- Improved back navigation and multi-screen back stack stability
