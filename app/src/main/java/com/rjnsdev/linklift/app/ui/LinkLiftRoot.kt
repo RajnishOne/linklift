@@ -100,18 +100,8 @@ internal fun LinkLiftRoot(
         }
     }
 
-    BackHandler(enabled = uiState.currentScreen == AppScreen.Preview) {
-        viewModel.backFromPreview()
-    }
-    BackHandler(enabled = uiState.currentScreen == AppScreen.Batch) {
-        if (uiState.batchProgress?.isActive == true) {
-            viewModel.cancelBatchProcessing()
-        } else {
-            viewModel.backFromBatch()
-        }
-    }
-    BackHandler(enabled = uiState.currentScreen == AppScreen.Processing) {
-        viewModel.cancelAnalysis()
+    BackHandler(enabled = uiState.currentScreen != AppScreen.Home || viewModel.canGoBack()) {
+        viewModel.handleBackPress()
     }
 
     val topBarTitle = when (uiState.currentScreen) {
@@ -128,18 +118,10 @@ internal fun LinkLiftRoot(
         -> null
     }
     val topBarBackAction: (() -> Unit)? = when (uiState.currentScreen) {
-        AppScreen.Preview -> {
-            {
-                viewModel.backFromPreview()
-            }
-        }
+        AppScreen.Preview,
         AppScreen.Batch -> {
             {
-                if (uiState.batchProgress?.isActive == true) {
-                    viewModel.cancelBatchProcessing()
-                } else {
-                    viewModel.backFromBatch()
-                }
+                viewModel.handleBackPress()
             }
         }
         else -> null

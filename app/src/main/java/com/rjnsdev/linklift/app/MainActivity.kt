@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -14,6 +15,16 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     private val viewModel: LinkLiftViewModel by viewModels()
+
+    private val backPressedCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            if (!viewModel.handleBackPress()) {
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
+            }
+        }
+    }
 
     /**
      * Android 13+ requires [Manifest.permission.POST_NOTIFICATIONS] at runtime
@@ -40,6 +51,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        onBackPressedDispatcher.addCallback(this, backPressedCallback)
         setContent {
             LinkLiftRoot(
                 viewModel = viewModel,

@@ -87,6 +87,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     private val _closeActivityEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val closeActivityEvents: SharedFlow<Unit> = _closeActivityEvents.asSharedFlow()
 
+    private val screenBackStack = ArrayDeque<AppScreen>()
+
     init {
         observePreferences()
 
@@ -173,14 +175,62 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(inputUrl = value) }
     }
 
+    fun canGoBack(): Boolean {
+        return _uiState.value.currentScreen != AppScreen.Home || screenBackStack.isNotEmpty()
+    }
+
+    fun handleBackPress(): Boolean {
+        when (_uiState.value.currentScreen) {
+            AppScreen.Preview -> {
+                backFromPreview()
+                return true
+            }
+            AppScreen.Processing -> {
+                cancelAnalysis()
+                return true
+            }
+            AppScreen.Batch -> {
+                if (_uiState.value.batchProgress?.isActive == true) {
+                    cancelBatchProcessing()
+                } else {
+                    backFromBatch()
+                }
+                return true
+            }
+            AppScreen.Downloads, AppScreen.Settings -> {
+                val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
+                _uiState.update { it.copy(currentScreen = targetScreen) }
+                return true
+            }
+            AppScreen.Home -> {
+                if (screenBackStack.isNotEmpty()) {
+                    val targetScreen = screenBackStack.removeLast()
+                    _uiState.update { it.copy(currentScreen = targetScreen) }
+                    return true
+                }
+                return false
+            }
+        }
+    }
+
     fun openScreen(screen: AppScreen) {
+        val current = _uiState.value.currentScreen
+        if (current == screen) return
+        if (screen == AppScreen.Home) {
+            screenBackStack.clear()
+        } else if (current !in setOf(AppScreen.Processing, AppScreen.Preview, AppScreen.Batch)) {
+            if (screenBackStack.lastOrNull() != current) {
+                screenBackStack.addLast(current)
+            }
+        }
         _uiState.update { it.copy(currentScreen = screen) }
     }
 
     fun backFromPreview() {
+        val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
         _uiState.update {
             it.copy(
-                currentScreen = AppScreen.Home,
+                currentScreen = targetScreen,
                 selectedPreviewIndex = 0,
                 selectedItemIndices = emptySet(),
             )
@@ -192,9 +242,10 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             _uiState.update { it.copy(message = "Wait for the batch to finish before going back.") }
             return
         }
+        val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
         _uiState.update {
             it.copy(
-                currentScreen = AppScreen.Home,
+                currentScreen = targetScreen,
                 batch = null,
                 selectedBatchIndices = emptySet(),
                 batchProgress = null,
@@ -260,6 +311,10 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             return true
         }
 
+        if (screenBackStack.isEmpty()) {
+            screenBackStack.addLast(AppScreen.Home)
+        }
+
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Home,
@@ -288,6 +343,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     private fun analyzeInput(rawInput: String) {
         val allUrls = extractAllUrls(rawInput)
         val urls = allUrls.filter { isSupportedMediaUrl(it) }
+
+        val current = _uiState.value.currentScreen
+        if (current !in setOf(AppScreen.Processing, AppScreen.Preview, AppScreen.Batch)) {
+            if (screenBackStack.lastOrNull() != current) {
+                screenBackStack.addLast(current)
+            }
+        }
 
         when {
             allUrls.isEmpty() -> {
@@ -377,9 +439,10 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val errMsg = error.message.orEmpty()
                 val needsYouTubeAuth = isYt && (!hasCookies || errMsg.contains("bot", ignoreCase = true) || errMsg.contains("Sign in", ignoreCase = true) || errMsg.contains("403") || errMsg.contains("cookies", ignoreCase = true))
 
+                val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
                 _uiState.update {
                     it.copy(
-                        currentScreen = AppScreen.Home,
+                        currentScreen = targetScreen,
                         analysisLatencyMs = null,
                         message = error.message ?: "Unable to read that playlist.",
                         showYouTubeAuthPrompt = needsYouTubeAuth,
@@ -473,9 +536,10 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val errMsg = error.message.orEmpty()
                 val needsYouTubeAuth = isYt && (!hasCookies || errMsg.contains("bot", ignoreCase = true) || errMsg.contains("Sign in", ignoreCase = true) || errMsg.contains("403") || errMsg.contains("cookies", ignoreCase = true) || errMsg.contains("reloaded", ignoreCase = true))
 
+                val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
                 _uiState.update {
                     it.copy(
-                        currentScreen = AppScreen.Home,
+                        currentScreen = targetScreen,
                         preview = null,
                         analysisLatencyMs = null,
                         message = error.message ?: "Unable to analyze that link.",
@@ -499,13 +563,14 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     fun cancelAnalysis() {
         val job = analysisJob
         analysisJob = null
+        val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
         if (job == null || !job.isActive) {
             // Nothing in flight — still make sure we're not stranded on the
             // Processing screen (e.g. analysis completed but UI is mid-flight).
             if (_uiState.value.currentScreen == AppScreen.Processing) {
                 _uiState.update {
                     it.copy(
-                        currentScreen = AppScreen.Home,
+                        currentScreen = targetScreen,
                         analysisStartedAt = null,
                         analysisLatencyMs = null,
                     )
@@ -516,7 +581,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         job.cancel()
         _uiState.update {
             it.copy(
-                currentScreen = AppScreen.Home,
+                currentScreen = targetScreen,
                 preview = null,
                 analysisStartedAt = null,
                 analysisLatencyMs = null,
