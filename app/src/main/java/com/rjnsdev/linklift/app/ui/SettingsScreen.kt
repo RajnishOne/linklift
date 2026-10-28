@@ -25,12 +25,16 @@ import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.LocalCafe
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.VolunteerActivism
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -221,13 +225,89 @@ internal fun SettingsScreen(
         }
 
         item {
+            val uriHandler = LocalUriHandler.current
+            NeonCard {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(shape = CircleShape, color = Color(0xFFFF424D).copy(alpha = 0.16f)) {
+                            Icon(
+                                imageVector = Icons.Rounded.Favorite,
+                                contentDescription = null,
+                                tint = Color(0xFFFF424D),
+                                modifier = Modifier.padding(10.dp),
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Support & Donate",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = Color.White,
+                            )
+                            Text(
+                                text = "Patreon, GitHub Sponsors & Ko-fi",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = LinkLiftTextSecondary,
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "LinkLift is completely free, open-source, and tracker-free. If you find the app helpful, consider supporting ongoing development:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LinkLiftTextSecondary,
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SupportLinkRow(
+                            icon = Icons.Rounded.VolunteerActivism,
+                            title = "Patreon",
+                            subtitle = "Become a patron on Patreon",
+                            tint = Color(0xFFF96854),
+                            onClick = { uriHandler.openUri(PATREON_URL) },
+                        )
+                        SupportLinkRow(
+                            icon = Icons.Rounded.Favorite,
+                            title = "GitHub Sponsors",
+                            subtitle = "Sponsor @RajnishOne on GitHub",
+                            tint = Color(0xFFEA4AAA),
+                            onClick = { uriHandler.openUri(GITHUB_SPONSORS_URL) },
+                        )
+                        SupportLinkRow(
+                            icon = Icons.Rounded.LocalCafe,
+                            title = "Ko-fi",
+                            subtitle = "Buy a coffee on Ko-fi",
+                            tint = Color(0xFFF16061),
+                            onClick = { uriHandler.openUri(KOFI_URL) },
+                        )
+                    }
+                }
+            }
+        }
+
+        item {
+            val uriHandler = LocalUriHandler.current
             NeonCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "About LinkLift",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "About LinkLift",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "v${BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LinkLiftAccentBright,
+                        )
+                    }
                     Text(
                         text = "Save files from direct links and supported public posts.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -238,6 +318,18 @@ internal fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = LinkLiftTextMuted,
                     )
+                    OutlinedButton(
+                        onClick = { uriHandler.openUri(GITHUB_REPO_URL) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                    ) {
+                        Text(
+                            text = "GitHub Repository & Issues",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
                 }
             }
         }
@@ -600,3 +692,65 @@ private fun SettingSwitchCard(
         }
     }
 }
+
+@Composable
+private fun SupportLinkRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = LinkLiftCard.copy(alpha = 0.7f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.28f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = tint.copy(alpha = 0.16f),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier
+                        .padding(9.dp)
+                        .size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LinkLiftTextSecondary,
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = "Open $title",
+                tint = LinkLiftTextMuted,
+            )
+        }
+    }
+}
+
+private const val PATREON_URL =
+    "https://patreon.com/bluematterdev?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink"
+private const val GITHUB_SPONSORS_URL = "https://github.com/sponsors/RajnishOne"
+private const val KOFI_URL = "https://ko-fi.com/rajnishone"
+private const val GITHUB_REPO_URL = "https://github.com/RajnishOne/linklift"
+

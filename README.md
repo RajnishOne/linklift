@@ -15,6 +15,7 @@
   <a href="https://chaquo.com/chaquopy/"><img src="https://img.shields.io/badge/Python-3.13%20(Chaquopy)-3776AB?style=flat&logo=python&logoColor=white" alt="Python 3.13"></a>
   <a href="https://github.com/yt-dlp/yt-dlp"><img src="https://img.shields.io/badge/Powered%20by-yt--dlp%20%26%20Instaloader-FF0000?style=flat" alt="yt-dlp"></a>
   <a href="https://github.com/RajnishOne/linklift/releases"><img src="https://img.shields.io/badge/F--Droid%20%26%20FOSS-Ready-009688?style=flat&logo=f-droid&logoColor=white" alt="F-Droid Ready"></a>
+  <a href="https://patreon.com/bluematterdev?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink"><img src="https://img.shields.io/badge/Patreon-F96854?style=flat&logo=patreon&logoColor=white" alt="Patreon"></a>
   <a href="https://ko-fi.com/rajnishone"><img src="https://img.shields.io/badge/Ko--fi-F16061?style=flat&logo=ko-fi&logoColor=white" alt="Ko-fi"></a>
   <a href="https://github.com/sponsors/RajnishOne"><img src="https://img.shields.io/badge/Sponsor-EA4AAA?style=flat&logo=github&logoColor=white" alt="Sponsor"></a>
   <a href="https://github.com/RajnishOne/linklift/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs Welcome"></a>
@@ -161,8 +162,9 @@ LinkLift is developed for **educational and personal archival purposes only**.
 
 ## 💖 Support & Donate
 
-If you find LinkLift useful and want to support ongoing development, consider buying a coffee or sponsoring the project:
+If you find LinkLift useful and want to support ongoing development, consider supporting via Patreon, Ko-fi, or GitHub Sponsors:
 
+[![Patreon](https://img.shields.io/badge/Support_on-Patreon-F96854?style=for-the-badge&logo=patreon&logoColor=white)](https://patreon.com/bluematterdev?utm_medium=unknown&utm_source=join_link&utm_campaign=creatorshare_creator&utm_content=copyLink)
 [![Ko-fi](https://img.shields.io/badge/Support_on-Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/rajnishone)
 [![GitHub Sponsors](https://img.shields.io/badge/Sponsor_on-GitHub-EA4AAA?style=for-the-badge&logo=github&logoColor=white)](https://github.com/sponsors/RajnishOne)
 
