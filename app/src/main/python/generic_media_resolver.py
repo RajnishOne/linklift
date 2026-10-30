@@ -15,10 +15,10 @@ _YTDLP_ANDROID_VR_BROKEN = _YTDLP_VERSION >= (2026, 8, 17)
 
 if _YTDLP_ANDROID_VR_BROKEN:
     _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["visionos", "web", "android"]
-    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["web", "mweb", "android"]
+    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["android", "ios", "mweb", "web"]
 else:
     _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["android_vr", "android"]
-    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["web", "mweb", "android"]
+    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["android", "ios", "mweb", "web"]
 
 _YT_DLP_BASE_OPTIONS = {
     "quiet": True,
@@ -729,6 +729,23 @@ def resolve_playlist(url, cookie_file_path=None, max_items=200):
             raise ValueError(str(error))
 
     raw_entries = (info or {}).get("entries") or []
+    if is_youtube and has_valid_cookies and primary_cookie_path is None and not raw_entries:
+        cookie_options = _ydl_options(
+            cookie_file_path=cookie_file_path,
+            noplaylist=False,
+            extract_flat="in_playlist",
+            playlistend=max_items_int,
+        )
+        try:
+            with YoutubeDL(cookie_options) as ydl:
+                cookie_info = ydl.extract_info(url, download=False)
+                cookie_entries = (cookie_info or {}).get("entries") or []
+                if cookie_entries:
+                    info = cookie_info
+                    raw_entries = cookie_entries
+        except Exception:
+            pass
+
     info_type = (info or {}).get("_type", "")
     is_playlist = bool(raw_entries) and (
         info_type in {"playlist", "multi_video"} or len(raw_entries) > 1
