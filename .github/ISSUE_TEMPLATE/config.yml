@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Discussions & Community Q&A
+    url: https://github.com/RajnishOne/linklift/discussions
+    about: Ask questions, get help with configuration, or discuss ideas with the community.
+  - name: 📦 Latest Releases & Changelogs
+    url: https://github.com/RajnishOne/linklift/releases
+    about: Check if your issue has already been fixed in a newer version or download new updates.

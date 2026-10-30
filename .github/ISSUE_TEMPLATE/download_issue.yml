@@ -1,0 +1,109 @@
+name: ⚠️ Media Extraction / Download Failure
+description: Report an issue where a specific URL or media fails to resolve or download
+title: "[Extraction Error]: "
+labels: ["bug", "extractor", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an extraction issue!
+        Please ensure you are running the latest version of LinkLift before opening an issue, as website extractors (`yt-dlp` / `instaloader`) are updated frequently.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform / Service
+      description: Which platform did the URL come from?
+      options:
+        - YouTube (Video)
+        - YouTube (Shorts)
+        - YouTube (Playlist / Batch)
+        - Instagram (Reel)
+        - Instagram (Post / Carousel)
+        - Instagram (Profile picture / Story)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: target_url
+    attributes:
+      label: Target URL
+      description: Please provide the exact public URL that failed. (DO NOT share private, copyrighted, or sensitive URLs).
+      placeholder: https://www.youtube.com/watch?v=... or https://www.instagram.com/reel/...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: failure_stage
+    attributes:
+      label: Failure Stage
+      description: Where did the process fail?
+      options:
+        - Info Fetching / URL Analysis (Could not retrieve media details)
+        - Format Selection / Quality List empty
+        - Video/Audio stream downloading
+        - Media Muxing (Merging video and audio into MP4/WebM)
+        - In-App ExoPlayer preview failed
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: error_details
+    attributes:
+      label: Error Message / App Output
+      description: Provide the exact error message or toast shown in LinkLift.
+      placeholder: "e.g. ERROR: [youtube] ...: Sign in to confirm you're not a bot, or Muxing failed: ..."
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser_check
+    attributes:
+      label: Works in standard web browser?
+      description: Does this exact link open and play normally in Chrome / Firefox on your device?
+      options:
+        - "Yes, plays fine in browser"
+        - "No, video is unavailable / deleted / geo-blocked"
+        - "Requires account login / age verification"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: cookie_status
+    attributes:
+      label: Cookies Configuration
+      description: Were you using imported cookies?
+      options:
+        - label: "I had cookies imported in LinkLift for this platform"
+        - label: "I tested with cookies cleared/disabled"
+
+  - type: input
+    id: app_version
+    attributes:
+      label: LinkLift Version
+      description: Found in LinkLift Settings -> About (e.g. v2.10, commit hash, or APK build).
+      placeholder: e.g. v2.10
+    validations:
+      required: true
+
+  - type: input
+    id: device_info
+    attributes:
+      label: Device & Android Version
+      description: e.g. Google Pixel 8 (Android 14) or Samsung Galaxy S23 (One UI 6, Android 14).
+      placeholder: e.g. Samsung Galaxy S22 - Android 14 / One UI 6.1
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and confirmed this is not a duplicate.
+          required: true
+        - label: I tested on the latest release of LinkLift.
+          required: true

@@ -1,0 +1,99 @@
+name: 🐛 Bug Report
+description: Report crashes, UI glitches, playback errors, or general bugs in LinkLift
+title: "[Bug]: "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve LinkLift!
+        If your issue is specifically about a specific URL failing to resolve or download, please use the **⚠️ Media Extraction / Download Failure** template instead.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      description: Which part of the application is malfunctioning?
+      options:
+        - UI / Navigation / Jetpack Compose
+        - In-App Media Player (ExoPlayer)
+        - Background Download Service & Notifications
+        - Share Sheet Integration (Opening links from external apps)
+        - Storage / File Saving / Scoped Storage
+        - Settings / Theme / Cookies Manager
+        - App Crash / ANR (App Not Responding)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what the bug is.
+      placeholder: What went wrong?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Tap on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What did you expect to happen, and what happened instead?
+      placeholder: Expected the download to complete in background, but the service was terminated.
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: LinkLift Version & Install Source
+      description: e.g. v2.10 (GitHub Release) or v2.9 (F-Droid)
+      placeholder: e.g. v2.10 (GitHub APK)
+    validations:
+      required: true
+
+  - type: input
+    id: device_info
+    attributes:
+      label: Device Model & Android Version
+      description: Manufacturer, device model, and Android OS version.
+      placeholder: e.g. Xiaomi 13 Pro (HyperOS 1.0, Android 14)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs_or_stacktrace
+    attributes:
+      label: Crash Log / Logcat / Stacktrace (if applicable)
+      description: Please paste any crash log or Android Logcat output here.
+      render: shell
+
+  - type: textarea
+    id: media_attachments
+    attributes:
+      label: Screenshots / Screen Recordings
+      description: Drag and drop any relevant screenshots or screen recordings here to help visualize the issue.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing open and closed issues to avoid duplicate reports.
+          required: true
+        - label: I am using the latest available version of LinkLift.
+          required: true
