@@ -263,6 +263,7 @@ data class LinkLiftUiState(
     val selectedItemIndices: Set<Int> = emptySet(),
     val batch: LinkBatch? = null,
     val selectedBatchIndices: Set<Int> = emptySet(),
+    val batchAudioOnly: Boolean = false,
     val batchProgress: BatchProgress? = null,
     val settings: UserPreferences = UserPreferences(),
     val targetSubfolder: String = "",

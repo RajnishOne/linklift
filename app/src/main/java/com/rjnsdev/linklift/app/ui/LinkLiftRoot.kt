@@ -187,6 +187,7 @@ internal fun LinkLiftRoot(
                             onToggleEntry = viewModel::toggleBatchEntry,
                             onSelectAll = viewModel::selectAllBatchEntries,
                             onClear = viewModel::clearBatchSelection,
+                            onAudioOnlyToggled = viewModel::setBatchAudioOnly,
                             onCancel = {
                                 if (uiState.batchProgress?.isActive == true) {
                                     viewModel.cancelBatchProcessing()

@@ -87,3 +87,92 @@ internal fun buildSafeFileName(
     val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
     return "linklift_${timestamp}.$cleanExt"
 }
+
+internal fun chooseAudioFormat(
+    audioFormats: List<MediaFormat>,
+    audioPref: AudioFormatPreference = AudioFormatPreference.Any,
+): MediaFormat? {
+    if (audioFormats.isEmpty()) return null
+    fun matchesAudioPref(format: MediaFormat): Boolean {
+        return when (audioPref) {
+            AudioFormatPreference.Any -> true
+            AudioFormatPreference.M4a -> format.ext.equals("m4a", ignoreCase = true)
+            AudioFormatPreference.Opus -> format.ext.equals("webm", ignoreCase = true) || format.ext.equals("opus", ignoreCase = true)
+            AudioFormatPreference.Mp3 -> format.ext.equals("mp3", ignoreCase = true)
+        }
+    }
+    val matching = audioFormats.filter { matchesAudioPref(it) }
+    val pool = if (matching.isNotEmpty()) matching else audioFormats
+    return pool.maxByOrNull { (it.abr ?: 0) * 1000L + (it.tbr ?: 0) } ?: pool.first()
+}
+
+internal fun chooseFormatForPreset(
+    formats: List<MediaFormat>,
+    preset: QualityPreset,
+    videoPref: VideoFormatPreference = VideoFormatPreference.Any,
+    audioPref: AudioFormatPreference = AudioFormatPreference.Any,
+    preferAudioOnly: Boolean = false,
+): MediaFormat? {
+    if (formats.isEmpty()) return null
+
+    val audioOnlyFormats = formats.filter { it.isAudioOnly }
+    val videoFormats = formats.filter { !it.isAudioOnly }
+
+    // If audio-only is preferred or this collection only contains audio streams
+    if (preferAudioOnly && audioOnlyFormats.isNotEmpty()) {
+        return chooseAudioFormat(audioOnlyFormats, audioPref)
+    }
+    if (videoFormats.isEmpty()) {
+        return chooseAudioFormat(audioOnlyFormats, audioPref)
+    }
+
+    fun matchesVideoPref(format: MediaFormat): Boolean {
+        return when (videoPref) {
+            VideoFormatPreference.Any -> true
+            VideoFormatPreference.Mp4 -> format.ext.equals("mp4", ignoreCase = true)
+            VideoFormatPreference.Webm -> format.ext.equals("webm", ignoreCase = true)
+        }
+    }
+
+    fun videoScore(format: MediaFormat): Long {
+        val prefBonus = if (matchesVideoPref(format)) 10_000_000L else 0L
+        val resScore = (format.height ?: 0) * 100_000L
+        val bitrateScore = (format.tbr ?: 0).toLong()
+        return prefBonus + resScore + bitrateScore
+    }
+
+    return when (preset) {
+        QualityPreset.SmallestFile -> {
+            val withSize = videoFormats.filter { it.fileSizeBytes != null && it.fileSizeBytes > 0 }
+            if (withSize.isNotEmpty()) {
+                withSize.minByOrNull { it.fileSizeBytes ?: Long.MAX_VALUE }
+            } else {
+                videoFormats.minByOrNull { (it.height ?: Int.MAX_VALUE) * 100_000L + (it.tbr ?: Int.MAX_VALUE) }
+            }
+        }
+        QualityPreset.BestQuality, QualityPreset.AskEveryTime -> {
+            val maxHeight = videoFormats.mapNotNull { it.height }.maxOrNull() ?: 0
+            val candidatesAtMax = videoFormats.filter { (it.height ?: 0) == maxHeight }
+            candidatesAtMax.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
+                ?: candidatesAtMax.maxByOrNull { it.tbr ?: 0 }
+                ?: videoFormats.maxByOrNull { videoScore(it) }
+                ?: videoFormats.first()
+        }
+        QualityPreset.Res1080p, QualityPreset.Res720p, QualityPreset.Res480p, QualityPreset.Res360p -> {
+            val target = preset.targetHeight ?: 1080
+            val exactMatches = videoFormats.filter { (it.height ?: 0) == target }
+            if (exactMatches.isNotEmpty()) {
+                exactMatches.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
+                    ?: exactMatches.maxByOrNull { it.tbr ?: 0 }
+            } else {
+                val lowerMatches = videoFormats.filter { (it.height ?: 0) <= target }
+                val candidatePool = lowerMatches.ifEmpty { videoFormats }
+                val bestHeight = candidatePool.mapNotNull { it.height }.maxOrNull() ?: 0
+                val atBestHeight = candidatePool.filter { (it.height ?: 0) == bestHeight }
+                atBestHeight.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
+                    ?: atBestHeight.maxByOrNull { it.tbr ?: 0 }
+                    ?: candidatePool.firstOrNull()
+            } ?: videoFormats.maxByOrNull { videoScore(it) } ?: videoFormats.first()
+        }
+    }
+}

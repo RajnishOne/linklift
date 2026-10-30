@@ -1,5 +1,6 @@
 package com.rjnsdev.linklift.app
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,9 +19,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.PlayCircleOutline
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -39,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rjnsdev.linklift.app.ui.FolderSelectionDialog
@@ -58,6 +62,7 @@ internal fun BatchScreen(
     onDownload: () -> Unit,
     onSelectTargetSubfolder: (String) -> Unit,
     onCreateSubfolder: (String) -> Unit,
+    onAudioOnlyToggled: (Boolean) -> Unit = {},
 ) {
     val batch = uiState.batch ?: return
     val selected = uiState.selectedBatchIndices
@@ -189,6 +194,103 @@ internal fun BatchScreen(
         item {
             NeonCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Format",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = LinkLiftTextSecondary,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        val isAudio = uiState.batchAudioOnly
+                        // Video option
+                        Surface(
+                            onClick = { if (!isProcessing) onAudioOnlyToggled(false) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (!isAudio) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (!isAudio) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            ),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Videocam,
+                                    contentDescription = "Video",
+                                    tint = if (!isAudio) Color.White else LinkLiftTextSecondary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Video",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = if (!isAudio) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (!isAudio) Color.White else LinkLiftTextSecondary,
+                                    )
+                                    Text(
+                                        text = uiState.settings.preferredQuality.label,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = LinkLiftTextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+
+                        // Audio option
+                        Surface(
+                            onClick = { if (!isProcessing) onAudioOnlyToggled(true) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isAudio) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isAudio) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                            ),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Audiotrack,
+                                    contentDescription = "Audio only",
+                                    tint = if (isAudio) Color.White else LinkLiftTextSecondary,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Audio only",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = if (isAudio) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isAudio) Color.White else LinkLiftTextSecondary,
+                                    )
+                                    Text(
+                                        text = uiState.settings.preferredAudioFormat.label,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = LinkLiftTextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            NeonCard {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -250,7 +352,7 @@ internal fun BatchScreen(
                 ),
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.CloudDownload,
+                    imageVector = if (uiState.batchAudioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.CloudDownload,
                     contentDescription = null,
                     tint = if (!isProcessing && selectedCount > 0) Color(0xFF0F0F0F) else LinkLiftTextMuted,
                 )
@@ -259,7 +361,8 @@ internal fun BatchScreen(
                     text = if (isProcessing) {
                         "Queuing downloads..."
                     } else if (selectedCount > 0) {
-                        "Download $selectedCount item${if (selectedCount == 1) "" else "s"}"
+                        val kindLabel = if (uiState.batchAudioOnly) "audio" else "item"
+                        "Download $selectedCount $kindLabel${if (selectedCount == 1) "" else "s"}"
                     } else {
                         "Select items to download"
                     },
