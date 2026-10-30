@@ -160,3 +160,12 @@ internal fun extractYouTubeThumbnailUrl(url: String): String? {
     val id = extractYouTubeVideoId(url) ?: return null
     return "https://i.ytimg.com/vi/$id/hqdefault.jpg"
 }
+
+internal fun buildGoogleVideoChunkUrl(url: String, rangeStart: Long, rangeEnd: Long, requestNumber: Int): String {
+    val cleanBase = url
+        .replace(Regex("""([?&])range=[^&]*&?""")) { mr -> if (mr.value.startsWith("?")) "?" else "&" }
+        .replace(Regex("""([?&])rn=[^&]*&?""")) { mr -> if (mr.value.startsWith("?")) "?" else "&" }
+        .trimEnd('?', '&')
+    val delimiter = if (cleanBase.contains("?")) "&" else "?"
+    return "$cleanBase${delimiter}range=$rangeStart-$rangeEnd&rn=$requestNumber"
+}

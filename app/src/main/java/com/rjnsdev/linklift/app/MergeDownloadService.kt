@@ -493,7 +493,7 @@ class MergeDownloadService : Service() {
                 Log.e("MergeDownloadService", "Download failed: HTTP ${resp.code} for $url")
                 val isYt = isYouTubeUrl(url) || url.contains("googlevideo.com")
                 val detail = if (resp.code == 403 && isYt) {
-                    "HTTP 403 (YouTube authentication required)"
+                    "HTTP 403 (GoogleVideo stream forbidden)"
                 } else {
                     "HTTP ${resp.code}${if (retryable) " (retryable)" else ""}"
                 }
@@ -556,14 +556,16 @@ class MergeDownloadService : Service() {
             }
         }
 
+        var requestNumber = (bytesSoFar / chunkSize).toInt()
         FileOutputStream(target, true).use { output ->
             while (bytesSoFar < totalBytes) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 val chunkEnd = minOf(bytesSoFar + chunkSize - 1L, totalBytes - 1L)
+                requestNumber++
+                val chunkUrl = buildGoogleVideoChunkUrl(url, bytesSoFar, chunkEnd, requestNumber)
                 val reqBuilder = Request.Builder()
-                    .url(url)
+                    .url(chunkUrl)
                     .header("User-Agent", effectiveUserAgent)
-                    .header("Range", "bytes=$bytesSoFar-$chunkEnd")
 
                 sanitizedHeaders.forEach { (k, v) -> reqBuilder.header(k, v) }
 
@@ -572,13 +574,13 @@ class MergeDownloadService : Service() {
                     if (!resp.isSuccessful) {
                         val isYt = url.contains("googlevideo.com")
                         val detail = if (resp.code == 403 && isYt) {
-                            "HTTP 403 (YouTube authentication required)"
+                            "HTTP 403 (GoogleVideo CDN rejected range $bytesSoFar-$chunkEnd)"
                         } else {
                             "HTTP ${resp.code}"
                         }
-                        throw IOException("Download chunk failed: $detail for $url")
+                        throw IOException("Download chunk failed: $detail for $chunkUrl")
                     }
-                    val body = resp.body ?: throw IOException("Empty response body for $url")
+                    val body = resp.body ?: throw IOException("Empty response body for $chunkUrl")
                     val buffer = ByteArray(64 * 1024)
                     var read: Int
                     var lastReported = 0L

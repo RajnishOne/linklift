@@ -2,6 +2,7 @@ package com.rjnsdev.linklift.app.util
 
 import com.rjnsdev.linklift.app.MediaFormat
 import com.rjnsdev.linklift.app.MediaKind
+import com.rjnsdev.linklift.app.buildGoogleVideoChunkUrl
 import com.rjnsdev.linklift.app.extractAllUrls
 import com.rjnsdev.linklift.app.extractFirstUrl
 import com.rjnsdev.linklift.app.isInstagramUrl
@@ -176,5 +177,19 @@ class SupportedSourcesUrlTest {
 
         // Unknown
         assertEquals(MediaKind.Unknown, MediaKind.fromMimeType("text/html", "https://example.com/page"))
+    }
+
+    @Test
+    fun testBuildGoogleVideoChunkUrl() {
+        val baseWithExistingRange = "https://rr1---sn.googlevideo.com/videoplayback?expire=123&range=0-1024&rn=1&clen=5000"
+        val chunkUrl1 = buildGoogleVideoChunkUrl(baseWithExistingRange, 10485760L, 20971519L, 2)
+        assertTrue("Must contain new range parameter", chunkUrl1.contains("range=10485760-20971519"))
+        assertTrue("Must contain new rn parameter", chunkUrl1.contains("rn=2"))
+        assertFalse("Must not contain old range", chunkUrl1.contains("range=0-1024"))
+
+        val baseWithoutRange = "https://rr1---sn.googlevideo.com/videoplayback?expire=123&clen=5000"
+        val chunkUrl2 = buildGoogleVideoChunkUrl(baseWithoutRange, 0L, 10485759L, 1)
+        assertTrue(chunkUrl2.contains("range=0-10485759"))
+        assertTrue(chunkUrl2.contains("rn=1"))
     }
 }
