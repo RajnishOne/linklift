@@ -60,10 +60,17 @@ object CookieHelper {
 
     fun formatCookieEntriesToNetscape(entries: List<CookieEntry>): String {
         val sb = StringBuilder(NETSCAPE_HEADER)
+        // Deduplicate entries by normalized domain and name, ensuring non-blank values are preserved
+        val deduped = LinkedHashMap<Pair<String, String>, CookieEntry>()
         entries.forEach { entry ->
-            if (entry.name.isNotBlank()) {
-                sb.append(entry.toNetscapeLine()).append("\n")
+            val normDomain = if (entry.domain.startsWith(".") || entry.domain.contains(":")) entry.domain else ".${entry.domain}"
+            val key = normDomain.lowercase() to entry.name.trim()
+            if (entry.name.isNotBlank() && entry.value.isNotBlank()) {
+                deduped[key] = entry
             }
+        }
+        deduped.values.forEach { entry ->
+            sb.append(entry.toNetscapeLine()).append("\n")
         }
         return sb.toString()
     }
@@ -85,7 +92,7 @@ object CookieHelper {
             val parts = trimmed.split("=", limit = 2)
             val name = parts[0].trim()
             val value = if (parts.size > 1) parts[1].trim() else ""
-            if (name.isNotEmpty()) {
+            if (name.isNotEmpty() && value.isNotEmpty()) {
                 entries.add(
                     CookieEntry(
                         domain = defaultDomain,

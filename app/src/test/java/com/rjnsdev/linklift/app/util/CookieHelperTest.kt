@@ -33,4 +33,43 @@ class CookieHelperTest {
         assertTrue(netscape.contains("__Secure-3PSID\tsec_token_999"))
         assertTrue(netscape.contains("SID\tsid_val"))
     }
+
+    @Test
+    fun testFormatCookieEntriesToNetscape_deduplicatesAndSkipsBlankValues() {
+        val entries = listOf(
+            CookieHelper.CookieEntry(
+                domain = ".youtube.com",
+                name = "SID",
+                value = "valid_sid",
+            ),
+            CookieHelper.CookieEntry(
+                domain = ".youtube.com",
+                name = "SID",
+                value = "", // Blank value that should not override valid_sid
+            ),
+            CookieHelper.CookieEntry(
+                domain = ".youtube.com",
+                name = "BLANK_COOKIE",
+                value = "   ", // All whitespace
+            ),
+            CookieHelper.CookieEntry(
+                domain = "youtube.com",
+                name = "HSID",
+                value = "valid_hsid",
+            )
+        )
+        val result = CookieHelper.formatCookieEntriesToNetscape(entries)
+        assertTrue(result.contains("valid_sid"))
+        assertTrue(result.contains("valid_hsid"))
+        assertFalse(result.contains("BLANK_COOKIE"))
+    }
+
+    @Test
+    fun testFormatRawCookieStringToNetscape_skipsEmptyValues() {
+        val raw = "SID=valid_sid; EMPTY=; HSID=valid_hsid; "
+        val result = CookieHelper.formatRawCookieStringToNetscape(raw)
+        assertTrue(result.contains("SID\tvalid_sid"))
+        assertTrue(result.contains("HSID\tvalid_hsid"))
+        assertFalse(result.contains("EMPTY"))
+    }
 }

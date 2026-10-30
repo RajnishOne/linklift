@@ -93,6 +93,8 @@ class YouTubeAuthActivity : ComponentActivity() {
         cm.flush()
 
         val ytCookies = cm.getCookie("https://www.youtube.com").orEmpty()
+        val mYtCookies = cm.getCookie("https://m.youtube.com").orEmpty()
+        val musicCookies = cm.getCookie("https://music.youtube.com").orEmpty()
         val googleCookies = cm.getCookie("https://accounts.google.com").orEmpty()
         val baseGoogleCookies = cm.getCookie("https://google.com").orEmpty()
 
@@ -106,7 +108,7 @@ class YouTubeAuthActivity : ComponentActivity() {
                     val parts = trimmed.split("=", limit = 2)
                     val name = parts[0].trim()
                     val value = if (parts.size > 1) parts[1].trim() else ""
-                    if (name.isNotEmpty()) {
+                    if (name.isNotEmpty() && value.isNotEmpty()) {
                         entries.add(
                             CookieHelper.CookieEntry(
                                 domain = domain,
@@ -123,6 +125,8 @@ class YouTubeAuthActivity : ComponentActivity() {
         }
 
         parseAndAdd(ytCookies, ".youtube.com")
+        parseAndAdd(mYtCookies, ".youtube.com")
+        parseAndAdd(musicCookies, ".youtube.com")
         parseAndAdd(googleCookies, ".google.com")
         parseAndAdd(baseGoogleCookies, ".google.com")
 
@@ -172,7 +176,7 @@ class YouTubeAuthActivity : ComponentActivity() {
                         val path = if (pathIdx >= 0) c.getString(pathIdx) else "/"
                         val expiry = if (expIdx >= 0) c.getLong(expIdx) else 0L
                         val secure = if (secIdx >= 0) c.getInt(secIdx) == 1 else true
-                        if (name.isNotBlank() && (hostKey.contains("youtube") || hostKey.contains("google"))) {
+                        if (name.isNotBlank() && value.isNotBlank() && (hostKey.contains("youtube") || hostKey.contains("google"))) {
                             entries.add(
                                 CookieHelper.CookieEntry(
                                     domain = hostKey,
