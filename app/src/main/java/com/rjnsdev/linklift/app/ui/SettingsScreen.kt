@@ -5,8 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +25,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Hd
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Favorite
@@ -56,6 +59,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rjnsdev.linklift.app.linkLiftListContentPadding
 import com.rjnsdev.linklift.app.ui.FolderSelectionDialog
@@ -76,6 +81,8 @@ internal fun SettingsScreen(
     onNotificationsChanged: (Boolean) -> Unit,
     onOnlineVideoPreviewChanged: (Boolean) -> Unit,
     onPreferredPresetChanged: (QualityPreset) -> Unit,
+    onPreferredVideoFormatChanged: (VideoFormatPreference) -> Unit,
+    onPreferredAudioFormatChanged: (AudioFormatPreference) -> Unit,
     onSignInYouTube: () -> Unit,
     onImportCookiesFile: () -> Unit,
     onImportCookiesClipboard: () -> Unit,
@@ -200,24 +207,126 @@ internal fun SettingsScreen(
 
         item {
             NeonCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        text = "Default format",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                    )
-                    Text(
-                        text = "Preferred format to pre-select. You can still change this on the preview screen.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LinkLiftTextSecondary,
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Default format & quality",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "Preferences used to pre-select formats on preview. You can always change this per link.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = LinkLiftTextSecondary,
+                        )
+                    }
+
+                    // Section 1: Target Video Resolution
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Target video quality",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
                         QualityPreset.entries.forEach { preset ->
                             PresetRow(
                                 preset = preset,
                                 isSelected = preferences.preferredQuality == preset,
                                 onClick = { onPreferredPresetChanged(preset) },
                             )
+                        }
+                    }
+
+                    // Section 2: Preferred Video Codec
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Preferred video codec & container",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "When multiple formats match your target resolution (e.g. 1080p MP4 vs 1080p WebM).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LinkLiftTextSecondary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            VideoFormatPreference.entries.forEach { pref ->
+                                val isSelected = preferences.preferredVideoFormat == pref
+                                Surface(
+                                    onClick = { onPreferredVideoFormatChanged(pref) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isSelected) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                    ),
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Text(
+                                            text = pref.label,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) Color.White else LinkLiftTextSecondary,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Section 3: Preferred Audio Codec
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Preferred audio codec & container",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "Default stream format when saving audio-only tracks.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LinkLiftTextSecondary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            AudioFormatPreference.entries.forEach { pref ->
+                                val isSelected = preferences.preferredAudioFormat == pref
+                                Surface(
+                                    onClick = { onPreferredAudioFormatChanged(pref) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isSelected) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                    ),
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Text(
+                                            text = pref.label,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) Color.White else LinkLiftTextSecondary,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -566,6 +675,8 @@ private fun PresetRow(
             Icon(
                 imageVector = when (preset) {
                     QualityPreset.BestQuality -> Icons.Rounded.Bolt
+                    QualityPreset.Res1080p, QualityPreset.Res720p -> Icons.Rounded.Hd
+                    QualityPreset.Res480p, QualityPreset.Res360p -> Icons.Rounded.PlayCircleOutline
                     QualityPreset.SmallestFile -> Icons.Rounded.Speed
                     QualityPreset.AskEveryTime -> Icons.Rounded.GraphicEq
                 },

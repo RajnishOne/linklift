@@ -220,6 +220,8 @@ internal fun LinkLiftRoot(
                             onNotificationsChanged = viewModel::updateCompletionNotifications,
                             onOnlineVideoPreviewChanged = viewModel::updateOnlineVideoPreview,
                             onPreferredPresetChanged = viewModel::updatePreferredQuality,
+                            onPreferredVideoFormatChanged = viewModel::updatePreferredVideoFormat,
+                            onPreferredAudioFormatChanged = viewModel::updatePreferredAudioFormat,
                             onSignInYouTube = {
                                 youTubeAuthLauncher.launch(YouTubeAuthActivity.createIntent(context))
                             },

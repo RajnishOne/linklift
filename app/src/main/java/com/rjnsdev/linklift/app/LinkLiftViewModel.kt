@@ -340,7 +340,12 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 }
                 val current = state.selectedFormatIdsByItem[index]
                 val selected = available.firstOrNull { it.formatId == current }
-                    ?: chooseFormatForPreset(available, state.settings.preferredQuality)
+                    ?: chooseFormatForPreset(
+                        formats = available,
+                        preset = state.settings.preferredQuality,
+                        videoPref = state.settings.preferredVideoFormat,
+                        audioPref = state.settings.preferredAudioFormat,
+                    )
                 index to selected?.formatId
             }
             val filtered = newSelections.mapNotNull { (idx, id) -> id?.let { idx to it } }.toMap()
@@ -581,8 +586,15 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val latency = SystemClock.elapsedRealtime() - startedAt
                 _uiState.update { current ->
                     val preset = current.settings.preferredQuality
+                    val videoPref = current.settings.preferredVideoFormat
+                    val audioPref = current.settings.preferredAudioFormat
                     val initialSelections = preview.items.mapIndexedNotNull { index, item ->
-                        chooseFormatForPreset(item.formats, preset)?.let { fmt ->
+                        chooseFormatForPreset(
+                            formats = item.formats,
+                            preset = preset,
+                            videoPref = videoPref,
+                            audioPref = audioPref,
+                        )?.let { fmt ->
                             index to fmt.formatId
                         }
                     }.toMap()
@@ -1134,7 +1146,14 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val enqueueOk = previewResult?.let { preview ->
                     val primary = preview.items.firstOrNull() ?: return@let null
                     val preset = uiState.value.settings.preferredQuality
-                    val chosen = chooseFormatForPreset(primary.formats, preset)
+                    val videoPref = uiState.value.settings.preferredVideoFormat
+                    val audioPref = uiState.value.settings.preferredAudioFormat
+                    val chosen = chooseFormatForPreset(
+                        formats = primary.formats,
+                        preset = preset,
+                        videoPref = videoPref,
+                        audioPref = audioPref,
+                    )
                     val useMergeService = chosen != null && shouldDownloadWithMergeService(chosen, entry.sourceUrl)
                     if (useMergeService) {
                         runCatching {
@@ -1276,26 +1295,86 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     private fun chooseFormatForPreset(
         formats: List<MediaFormat>,
         preset: QualityPreset,
+        videoPref: VideoFormatPreference = uiState.value.settings.preferredVideoFormat,
+        audioPref: AudioFormatPreference = uiState.value.settings.preferredAudioFormat,
     ): MediaFormat? {
         if (formats.isEmpty()) return null
+
+        val audioOnlyFormats = formats.filter { it.isAudioOnly }
         val videoFormats = formats.filter { !it.isAudioOnly }
-        val pool = if (videoFormats.isNotEmpty()) videoFormats else formats
+
+        // If this collection only contains audio streams
+        if (videoFormats.isEmpty()) {
+            return chooseAudioFormat(audioOnlyFormats, audioPref)
+        }
+
+        fun matchesVideoPref(format: MediaFormat): Boolean {
+            return when (videoPref) {
+                VideoFormatPreference.Any -> true
+                VideoFormatPreference.Mp4 -> format.ext.equals("mp4", ignoreCase = true)
+                VideoFormatPreference.Webm -> format.ext.equals("webm", ignoreCase = true)
+            }
+        }
+
+        fun videoScore(format: MediaFormat): Long {
+            val prefBonus = if (matchesVideoPref(format)) 10_000_000L else 0L
+            val resScore = (format.height ?: 0) * 100_000L
+            val bitrateScore = (format.tbr ?: 0).toLong()
+            return prefBonus + resScore + bitrateScore
+        }
+
         return when (preset) {
-            QualityPreset.BestQuality -> pool.maxByOrNull { format ->
-                (format.height ?: 0) * 100_000L + (format.tbr ?: 0)
-            } ?: pool.first()
             QualityPreset.SmallestFile -> {
-                val withSize = pool.filter { it.fileSizeBytes != null && it.fileSizeBytes > 0 }
+                val withSize = videoFormats.filter { it.fileSizeBytes != null && it.fileSizeBytes > 0 }
                 if (withSize.isNotEmpty()) {
                     withSize.minByOrNull { it.fileSizeBytes ?: Long.MAX_VALUE }
                 } else {
-                    pool.minByOrNull { (it.height ?: Int.MAX_VALUE) * 100_000L + (it.tbr ?: Int.MAX_VALUE) }
+                    videoFormats.minByOrNull { (it.height ?: Int.MAX_VALUE) * 100_000L + (it.tbr ?: Int.MAX_VALUE) }
                 }
             }
-            QualityPreset.AskEveryTime -> pool.maxByOrNull { format ->
-                (format.height ?: 0) * 100_000L + (format.tbr ?: 0)
-            } ?: pool.first()
+            QualityPreset.BestQuality, QualityPreset.AskEveryTime -> {
+                val maxHeight = videoFormats.mapNotNull { it.height }.maxOrNull() ?: 0
+                val candidatesAtMax = videoFormats.filter { (it.height ?: 0) == maxHeight }
+                candidatesAtMax.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
+                    ?: candidatesAtMax.maxByOrNull { it.tbr ?: 0 }
+                    ?: videoFormats.maxByOrNull { videoScore(it) }
+                    ?: videoFormats.first()
+            }
+            QualityPreset.Res1080p, QualityPreset.Res720p, QualityPreset.Res480p, QualityPreset.Res360p -> {
+                val target = preset.targetHeight ?: 1080
+                val exactMatches = videoFormats.filter { (it.height ?: 0) == target }
+                if (exactMatches.isNotEmpty()) {
+                    exactMatches.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
+                        ?: exactMatches.maxByOrNull { it.tbr ?: 0 }
+                } else {
+                    val lowerMatches = videoFormats.filter { (it.height ?: 0) <= target }
+                    val candidatePool = lowerMatches.ifEmpty { videoFormats }
+                    val bestHeight = candidatePool.mapNotNull { it.height }.maxOrNull() ?: 0
+                    val atBestHeight = candidatePool.filter { (it.height ?: 0) == bestHeight }
+                    atBestHeight.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
+                        ?: atBestHeight.maxByOrNull { it.tbr ?: 0 }
+                        ?: candidatePool.firstOrNull()
+                } ?: videoFormats.maxByOrNull { videoScore(it) } ?: videoFormats.first()
+            }
         }
+    }
+
+    private fun chooseAudioFormat(
+        audioFormats: List<MediaFormat>,
+        audioPref: AudioFormatPreference,
+    ): MediaFormat? {
+        if (audioFormats.isEmpty()) return null
+        fun matchesAudioPref(format: MediaFormat): Boolean {
+            return when (audioPref) {
+                AudioFormatPreference.Any -> true
+                AudioFormatPreference.M4a -> format.ext.equals("m4a", ignoreCase = true)
+                AudioFormatPreference.Opus -> format.ext.equals("webm", ignoreCase = true) || format.ext.equals("opus", ignoreCase = true)
+                AudioFormatPreference.Mp3 -> format.ext.equals("mp3", ignoreCase = true)
+            }
+        }
+        val matching = audioFormats.filter { matchesAudioPref(it) }
+        val pool = if (matching.isNotEmpty()) matching else audioFormats
+        return pool.maxByOrNull { (it.abr ?: 0) * 1000L + (it.tbr ?: 0) } ?: pool.first()
     }
 
     private fun resolveItemForDownload(
@@ -1421,6 +1500,22 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             appContext.linkLiftDataStore.edit { prefs ->
                 prefs[PreferenceKeys.preferredQuality] = preset.storageKey
+            }
+        }
+    }
+
+    fun updatePreferredVideoFormat(format: VideoFormatPreference) {
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                prefs[PreferenceKeys.preferredVideoFormat] = format.storageKey
+            }
+        }
+    }
+
+    fun updatePreferredAudioFormat(format: AudioFormatPreference) {
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                prefs[PreferenceKeys.preferredAudioFormat] = format.storageKey
             }
         }
     }
@@ -1568,6 +1663,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         wifiOnly = prefs[PreferenceKeys.wifiOnly] ?: false,
                         completionNotifications = prefs[PreferenceKeys.completionNotifications] ?: true,
                         preferredQuality = QualityPreset.fromStorageKey(prefs[PreferenceKeys.preferredQuality]),
+                        preferredVideoFormat = VideoFormatPreference.fromStorageKey(prefs[PreferenceKeys.preferredVideoFormat]),
+                        preferredAudioFormat = AudioFormatPreference.fromStorageKey(prefs[PreferenceKeys.preferredAudioFormat]),
                         enableOnlineVideoPreview = prefs[PreferenceKeys.enableOnlineVideoPreview] ?: true,
                         downloadLocation = defaultDownloadLocation(subfolder),
                         downloadSubfolder = subfolder,

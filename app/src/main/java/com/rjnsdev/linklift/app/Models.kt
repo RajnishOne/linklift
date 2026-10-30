@@ -55,21 +55,53 @@ enum class DownloadState {
     Paused,
 }
 
-enum class QualityPreset(val storageKey: String, val label: String, val description: String) {
+enum class QualityPreset(
+    val storageKey: String,
+    val label: String,
+    val description: String,
+    val targetHeight: Int? = null,
+) {
     BestQuality(
         storageKey = "best_quality",
         label = "Best quality",
         description = "Always pick the highest-resolution stream available.",
+        targetHeight = null,
+    ),
+    Res1080p(
+        storageKey = "1080p",
+        label = "1080p (Full HD)",
+        description = "Target 1080p resolution or closest available match.",
+        targetHeight = 1080,
+    ),
+    Res720p(
+        storageKey = "720p",
+        label = "720p (HD)",
+        description = "Target 720p resolution or closest available match.",
+        targetHeight = 720,
+    ),
+    Res480p(
+        storageKey = "480p",
+        label = "480p (SD)",
+        description = "Target 480p standard resolution to save data.",
+        targetHeight = 480,
+    ),
+    Res360p(
+        storageKey = "360p",
+        label = "360p (Data saver)",
+        description = "Target 360p resolution for minimal storage and bandwidth.",
+        targetHeight = 360,
     ),
     SmallestFile(
         storageKey = "smallest_file",
         label = "Smallest file",
         description = "Optimize for the lowest data usage and smallest download size.",
+        targetHeight = null,
     ),
     AskEveryTime(
         storageKey = "ask_every_time",
         label = "Ask every time",
         description = "Show the format picker on every analyze so you can choose per link.",
+        targetHeight = null,
     );
 
     companion object {
@@ -78,10 +110,35 @@ enum class QualityPreset(val storageKey: String, val label: String, val descript
     }
 }
 
+enum class VideoFormatPreference(val storageKey: String, val label: String, val ext: String) {
+    Any(storageKey = "any", label = "Auto", ext = ""),
+    Mp4(storageKey = "mp4", label = "MP4", ext = "mp4"),
+    Webm(storageKey = "webm", label = "WebM", ext = "webm");
+
+    companion object {
+        fun fromStorageKey(key: String?): VideoFormatPreference =
+            entries.firstOrNull { it.storageKey == key } ?: Any
+    }
+}
+
+enum class AudioFormatPreference(val storageKey: String, val label: String, val ext: String) {
+    Any(storageKey = "any", label = "Auto", ext = ""),
+    M4a(storageKey = "m4a", label = "M4A", ext = "m4a"),
+    Opus(storageKey = "opus", label = "WebM / Opus", ext = "webm"),
+    Mp3(storageKey = "mp3", label = "MP3", ext = "mp3");
+
+    companion object {
+        fun fromStorageKey(key: String?): AudioFormatPreference =
+            entries.firstOrNull { it.storageKey == key } ?: Any
+    }
+}
+
 data class UserPreferences(
     val wifiOnly: Boolean = false,
     val completionNotifications: Boolean = true,
     val preferredQuality: QualityPreset = QualityPreset.BestQuality,
+    val preferredVideoFormat: VideoFormatPreference = VideoFormatPreference.Any,
+    val preferredAudioFormat: AudioFormatPreference = AudioFormatPreference.Any,
     val enableOnlineVideoPreview: Boolean = true,
     val downloadLocation: String = "Downloads/LinkLift",
     val downloadSubfolder: String = "",
