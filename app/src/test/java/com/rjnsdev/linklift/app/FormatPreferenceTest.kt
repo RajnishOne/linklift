@@ -160,4 +160,61 @@ class FormatPreferenceTest {
         )
         assertEquals("251", chosenOpus?.formatId)
     }
+
+    @Test
+    fun chooseFormatForPreset_askEveryTime_withPreferAudioOnly() {
+        val videoFormat = MediaFormat(
+            formatId = "18",
+            label = "360p MP4",
+            mediaUrl = "https://example.com/video.mp4",
+            mimeType = "video/mp4",
+            kind = MediaKind.Video,
+            ext = "mp4",
+            height = 360,
+            width = 640,
+            fps = 30,
+            abr = null,
+            tbr = 800,
+            fileSizeBytes = 10000000L,
+            fileSizeApprox = false,
+            isAudioOnly = false,
+            isProgressive = true,
+            isVideoOnly = false,
+        )
+        val audioFormat = MediaFormat(
+            formatId = "140",
+            label = "Audio 128kbps M4A",
+            mediaUrl = "https://example.com/audio.m4a",
+            mimeType = "audio/mp4",
+            kind = MediaKind.Audio,
+            ext = "m4a",
+            height = null,
+            width = null,
+            fps = null,
+            abr = 128,
+            tbr = 128,
+            fileSizeBytes = 3000000L,
+            fileSizeApprox = false,
+            isAudioOnly = true,
+            isProgressive = false,
+            isVideoOnly = false,
+        )
+        val formats = listOf(videoFormat, audioFormat)
+
+        val chosenAudio = chooseFormatForPreset(
+            formats = formats,
+            preset = QualityPreset.AskEveryTime,
+            preferAudioOnly = true,
+        )
+        assertEquals("140", chosenAudio?.formatId)
+        assertEquals(true, chosenAudio?.isAudioOnly)
+
+        val chosenVideo = chooseFormatForPreset(
+            formats = formats,
+            preset = QualityPreset.AskEveryTime,
+            preferAudioOnly = false,
+        )
+        assertEquals("18", chosenVideo?.formatId)
+        assertEquals(false, chosenVideo?.isAudioOnly)
+    }
 }

@@ -7,6 +7,7 @@ import com.rjnsdev.linklift.app.extractAllUrls
 import com.rjnsdev.linklift.app.extractFirstUrl
 import com.rjnsdev.linklift.app.isInstagramUrl
 import com.rjnsdev.linklift.app.isSupportedMediaUrl
+import com.rjnsdev.linklift.app.isYouTubeAuthRequired
 import com.rjnsdev.linklift.app.isYouTubeUrl
 import com.rjnsdev.linklift.app.isYtDlpSupportedHost
 import com.rjnsdev.linklift.app.looksLikePlaylistUrl
@@ -191,5 +192,26 @@ class SupportedSourcesUrlTest {
         val chunkUrl2 = buildGoogleVideoChunkUrl(baseWithoutRange, 0L, 10485759L, 1)
         assertTrue(chunkUrl2.contains("range=0-10485759"))
         assertTrue(chunkUrl2.contains("rn=1"))
+    }
+
+    @Test
+    fun testIsYouTubeAuthRequired() {
+        // Non-YouTube URLs never require YouTube auth
+        assertFalse(isYouTubeAuthRequired(isYt = false, hasCookies = false, errMsg = "403 Forbidden"))
+
+        // Unauthenticated YouTube errors require auth
+        assertTrue(isYouTubeAuthRequired(isYt = true, hasCookies = false, errMsg = "Sign in to confirm you're not a bot"))
+        assertTrue(isYouTubeAuthRequired(isYt = true, hasCookies = false, errMsg = "HTTP 403"))
+        assertTrue(isYouTubeAuthRequired(isYt = true, hasCookies = false, errMsg = "This playlist is private"))
+
+        // When user ALREADY has cookies:
+        // Generic 403 or chunk errors must NOT prompt user to sign in
+        assertFalse(isYouTubeAuthRequired(isYt = true, hasCookies = true, errMsg = "Download chunk failed: HTTP 403 for url"))
+        assertFalse(isYouTubeAuthRequired(isYt = true, hasCookies = true, errMsg = "HTTP 403 (GoogleVideo CDN rejected range 0-1000)"))
+        assertFalse(isYouTubeAuthRequired(isYt = true, hasCookies = true, errMsg = "Connection reset by peer"))
+
+        // When cookies actually expired / session invalid:
+        assertTrue(isYouTubeAuthRequired(isYt = true, hasCookies = true, errMsg = "Sign in to confirm your identity"))
+        assertTrue(isYouTubeAuthRequired(isYt = true, hasCookies = true, errMsg = "Your cookie session has expired"))
     }
 }

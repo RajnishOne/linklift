@@ -169,3 +169,19 @@ internal fun buildGoogleVideoChunkUrl(url: String, rangeStart: Long, rangeEnd: L
     val delimiter = if (cleanBase.contains("?")) "&" else "?"
     return "$cleanBase${delimiter}range=$rangeStart-$rangeEnd&rn=$requestNumber"
 }
+
+internal fun isYouTubeAuthRequired(isYt: Boolean, hasCookies: Boolean, errMsg: String): Boolean {
+    if (!isYt) return false
+    if (!hasCookies) {
+        return errMsg.contains("bot", ignoreCase = true) ||
+            errMsg.contains("Sign in", ignoreCase = true) ||
+            errMsg.contains("403") ||
+            errMsg.contains("cookies", ignoreCase = true) ||
+            errMsg.contains("reloaded", ignoreCase = true) ||
+            errMsg.contains("Private", ignoreCase = true)
+    }
+    // If cookies are already present, only prompt if YouTube explicitly indicates sign-in/account failure
+    return errMsg.contains("Sign in to confirm", ignoreCase = true) ||
+        errMsg.contains("Sign in with", ignoreCase = true) ||
+        (errMsg.contains("cookie", ignoreCase = true) && errMsg.contains("expired", ignoreCase = true))
+}
