@@ -4,3 +4,4 @@
 - Smart format scoring and auto-selection matching target resolution and container preferences on link analysis
 - Improved device back button navigation across all screens with double-back press confirmation to exit on Dashboard
 - Download queue stability improvements and UI responsiveness optimizations
+
