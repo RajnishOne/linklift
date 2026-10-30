@@ -84,9 +84,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     )
     val uiState: StateFlow<LinkLiftUiState> = _uiState.asStateFlow()
 
-    private val _closeActivityEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val closeActivityEvents: SharedFlow<Unit> = _closeActivityEvents.asSharedFlow()
-
     private val screenBackStack = ArrayDeque<AppScreen>()
 
     init {
@@ -181,38 +178,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private var lastBackPressTime = 0L
+
     fun canGoBack(): Boolean {
-        if (_uiState.value.isFromShare) return true
         return _uiState.value.currentScreen != AppScreen.Home || screenBackStack.isNotEmpty()
     }
 
     fun handleBackPress(): Boolean {
-        if (_uiState.value.isFromShare) {
-            when (_uiState.value.currentScreen) {
-                AppScreen.Preview -> {
-                    backFromPreview()
-                    return true
-                }
-                AppScreen.Processing -> {
-                    cancelAnalysis()
-                    return true
-                }
-                AppScreen.Batch -> {
-                    if (_uiState.value.batchProgress?.isActive == true) {
-                        cancelBatchProcessing()
-                    } else {
-                        backFromBatch()
-                    }
-                    return true
-                }
-                else -> {
-                    _uiState.update { it.copy(isFromShare = false) }
-                    _closeActivityEvents.tryEmit(Unit)
-                    return true
-                }
-            }
-        }
-
         when (_uiState.value.currentScreen) {
             AppScreen.Preview -> {
                 backFromPreview()
@@ -241,7 +213,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     _uiState.update { it.copy(currentScreen = targetScreen) }
                     return true
                 }
-                return false
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressTime < 2000L) {
+                    return false
+                }
+                lastBackPressTime = now
+                showToast("Press back again to exit")
+                return true
             }
         }
     }
@@ -260,24 +238,14 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun backFromPreview() {
-        if (_uiState.value.isFromShare) {
-            _uiState.update {
-                it.copy(
-                    isFromShare = false,
-                    preview = null,
-                    selectedPreviewIndex = 0,
-                    selectedItemIndices = emptySet(),
-                )
-            }
-            _closeActivityEvents.tryEmit(Unit)
-            return
-        }
         val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
         _uiState.update {
             it.copy(
                 currentScreen = targetScreen,
+                preview = null,
                 selectedPreviewIndex = 0,
                 selectedItemIndices = emptySet(),
+                isFromShare = false,
             )
         }
     }
@@ -287,18 +255,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             _uiState.update { it.copy(message = "Wait for the batch to finish before going back.") }
             return
         }
-        if (_uiState.value.isFromShare) {
-            _uiState.update {
-                it.copy(
-                    isFromShare = false,
-                    batch = null,
-                    selectedBatchIndices = emptySet(),
-                    batchProgress = null,
-                )
-            }
-            _closeActivityEvents.tryEmit(Unit)
-            return
-        }
         val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
         _uiState.update {
             it.copy(
@@ -306,6 +262,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 batch = null,
                 selectedBatchIndices = emptySet(),
                 batchProgress = null,
+                isFromShare = false,
             )
         }
     }
@@ -377,9 +334,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             return true
         }
 
-        if (isFromShare) {
-            screenBackStack.clear()
-        } else if (screenBackStack.isEmpty()) {
+        if (screenBackStack.isEmpty()) {
             screenBackStack.addLast(AppScreen.Home)
         }
 
@@ -414,10 +369,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
 
         val current = _uiState.value.currentScreen
         if (current !in setOf(AppScreen.Processing, AppScreen.Preview, AppScreen.Batch)) {
-            if (!_uiState.value.isFromShare) {
-                if (screenBackStack.lastOrNull() != current) {
-                    screenBackStack.addLast(current)
-                }
+            if (screenBackStack.lastOrNull() != current) {
+                screenBackStack.addLast(current)
             }
         }
 
@@ -647,35 +600,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     fun cancelAnalysis() {
         val job = analysisJob
         analysisJob = null
-        if (_uiState.value.isFromShare) {
-            job?.cancel()
-            _uiState.update {
-                it.copy(
-                    isFromShare = false,
-                    preview = null,
-                    analysisStartedAt = null,
-                    analysisLatencyMs = null,
-                )
-            }
-            _closeActivityEvents.tryEmit(Unit)
-            return
-        }
+        job?.cancel()
         val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
-        if (job == null || !job.isActive) {
-            // Nothing in flight — still make sure we're not stranded on the
-            // Processing screen (e.g. analysis completed but UI is mid-flight).
-            if (_uiState.value.currentScreen == AppScreen.Processing) {
-                _uiState.update {
-                    it.copy(
-                        currentScreen = targetScreen,
-                        analysisStartedAt = null,
-                        analysisLatencyMs = null,
-                    )
-                }
-            }
-            return
-        }
-        job.cancel()
         _uiState.update {
             it.copy(
                 currentScreen = targetScreen,
@@ -683,6 +609,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 analysisStartedAt = null,
                 analysisLatencyMs = null,
                 message = "Analysis cancelled.",
+                isFromShare = false,
             )
         }
     }
@@ -758,18 +685,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     subfolder = currentTarget,
                 )
             }.onSuccess {
-                val wasFromShare = uiState.value.isFromShare
                 _uiState.update {
                     it.copy(
-                        currentScreen = if (wasFromShare) it.currentScreen else AppScreen.Downloads,
+                        currentScreen = AppScreen.Downloads,
                         message = "Download queued in $downloadLoc",
                         targetSubfolder = it.settings.downloadSubfolder,
                         isFromShare = false,
                     )
-                }
-                if (wasFromShare) {
-                    showToast("Download started • $downloadLoc")
-                    _closeActivityEvents.tryEmit(Unit)
                 }
             }.onFailure { error ->
                 _uiState.update {
@@ -784,7 +706,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         item: PreviewMediaItem,
         format: MediaFormat,
         subfolder: String? = null,
-        autoCloseIfFromShare: Boolean = true,
     ) {
         val audioFormat = format.mergeAudio // might be null
         val outputExt = if (format.isAudioOnly) {
@@ -834,19 +755,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         )
 
         val actionLabel = if (format.requiresMerge) "Merging" else "Downloading"
-        val wasFromShare = uiState.value.isFromShare
-        val shouldClose = autoCloseIfFromShare && wasFromShare
         _uiState.update {
             it.copy(
-                currentScreen = if (shouldClose) it.currentScreen else AppScreen.Downloads,
+                currentScreen = AppScreen.Downloads,
                 message = "$actionLabel ${format.label} • saving to $downloadLoc",
                 targetSubfolder = it.settings.downloadSubfolder,
-                isFromShare = if (shouldClose) false else it.isFromShare,
+                isFromShare = false,
             )
-        }
-        if (shouldClose) {
-            showToast("$actionLabel ${format.label} started")
-            _closeActivityEvents.tryEmit(Unit)
         }
     }
 
@@ -898,29 +813,23 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             return
         }
 
-        val wasFromShare = state.isFromShare
         merges.forEach { (item, format) ->
             enqueueMergeJob(
                 sourceUrl = preview.sourceUrl,
                 item = item,
                 format = format,
                 subfolder = currentTarget,
-                autoCloseIfFromShare = false,
             )
         }
 
         if (standard.isEmpty()) {
             _uiState.update {
                 it.copy(
-                    currentScreen = if (wasFromShare) it.currentScreen else AppScreen.Downloads,
+                    currentScreen = AppScreen.Downloads,
                     message = "Merging ${merges.size} item${if (merges.size == 1) "" else "s"} • saving to $downloadLoc",
                     targetSubfolder = it.settings.downloadSubfolder,
                     isFromShare = false,
                 )
-            }
-            if (wasFromShare) {
-                showToast("Downloading ${merges.size} items in background")
-                _closeActivityEvents.tryEmit(Unit)
             }
             return
         }
@@ -936,18 +845,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 )
             }.onSuccess {
                 val totalQueued = standard.size + merges.size
-                val wasFromShare = uiState.value.isFromShare
                 _uiState.update {
                     it.copy(
-                        currentScreen = if (wasFromShare) it.currentScreen else AppScreen.Downloads,
+                        currentScreen = AppScreen.Downloads,
                         message = "$totalQueued download${if (totalQueued == 1) "" else "s"} queued in $downloadLoc",
                         targetSubfolder = it.settings.downloadSubfolder,
                         isFromShare = false,
                     )
-                }
-                if (wasFromShare) {
-                    showToast("Queued $totalQueued items in background")
-                    _closeActivityEvents.tryEmit(Unit)
                 }
             }.onFailure { error ->
             }.onFailure { error ->
@@ -1004,24 +908,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         // Tearing down the batch screen also stops any in-flight processing.
         batchProcessingJob?.cancel()
         batchProcessingJob = null
-        if (_uiState.value.isFromShare) {
-            _uiState.update {
-                it.copy(
-                    isFromShare = false,
-                    batch = null,
-                    selectedBatchIndices = emptySet(),
-                    batchProgress = null,
-                )
-            }
-            _closeActivityEvents.tryEmit(Unit)
-            return
-        }
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Home,
                 batch = null,
                 selectedBatchIndices = emptySet(),
                 batchProgress = null,
+                isFromShare = false,
             )
         }
     }
@@ -1042,28 +935,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val progress = _uiState.value.batchProgress
         val processed = progress?.processed ?: 0
         val total = progress?.total ?: 0
-        if (_uiState.value.isFromShare) {
-            _uiState.update {
-                it.copy(
-                    isFromShare = false,
-                    batch = null,
-                    selectedBatchIndices = emptySet(),
-                    batchProgress = null,
-                )
-            }
-            showToast(
-                if (total > 0) "Batch cancelled after $processed of $total"
-                else "Batch cancelled"
-            )
-            _closeActivityEvents.tryEmit(Unit)
-            return
-        }
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Home,
                 batch = null,
                 selectedBatchIndices = emptySet(),
                 batchProgress = null,
+                isFromShare = false,
                 message = if (total > 0) {
                     "Batch cancelled after $processed of $total. Already-queued downloads continue."
                 } else {
@@ -1162,7 +1040,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                                 item = primary,
                                 format = chosen,
                                 subfolder = batchFolder,
-                                autoCloseIfFromShare = false,
                             )
                         }.isSuccess
                     } else {
@@ -1205,7 +1082,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
 
             batchProcessingJob = null
-            val wasFromShare = uiState.value.isFromShare
             val batchMsg = buildString {
                 append("Queued $succeeded of ${selectedEntries.size}")
                 if (failed > 0) append(" • $failed failed")
@@ -1213,7 +1089,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
             _uiState.update {
                 it.copy(
-                    currentScreen = if (wasFromShare) it.currentScreen else AppScreen.Downloads,
+                    currentScreen = AppScreen.Downloads,
                     batchProgress = null,
                     batch = null,
                     selectedBatchIndices = emptySet(),
@@ -1221,10 +1097,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     isFromShare = false,
                     message = batchMsg,
                 )
-            }
-            if (wasFromShare) {
-                showToast(batchMsg)
-                _closeActivityEvents.tryEmit(Unit)
             }
         }
     }

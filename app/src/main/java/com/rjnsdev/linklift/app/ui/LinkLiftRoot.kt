@@ -94,14 +94,10 @@ internal fun LinkLiftRoot(
         viewModel.clearMessage()
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.closeActivityEvents.collect {
+    BackHandler(enabled = true) {
+        if (!viewModel.handleBackPress()) {
             (context as? Activity)?.finish()
         }
-    }
-
-    BackHandler(enabled = uiState.currentScreen != AppScreen.Home || viewModel.canGoBack()) {
-        viewModel.handleBackPress()
     }
 
     val topBarTitle = when (uiState.currentScreen) {
