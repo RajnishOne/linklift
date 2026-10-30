@@ -333,7 +333,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { state ->
             val preview = state.preview ?: return@update state.copy(showAudioOnly = enabled)
             val newSelections = preview.items.mapIndexed { index, item ->
-                val available = if (enabled) item.formats.filter { it.isAudioOnly } else item.formats
+                val available = if (enabled) {
+                    item.formats.filter { it.isAudioOnly }
+                } else {
+                    item.formats.filter { !it.isAudioOnly }.ifEmpty { item.formats }
+                }
                 val current = state.selectedFormatIdsByItem[index]
                 val selected = available.firstOrNull { it.formatId == current }
                     ?: chooseFormatForPreset(available, state.settings.preferredQuality)

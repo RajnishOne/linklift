@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircleOutline
+import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -113,13 +114,16 @@ internal fun PreviewScreen(
     val selectedIndices = uiState.selectedItemIndices
     val selectedCount = selectedIndices.size
     val allFormats = currentItem.formats
-    val displayFormats = if (uiState.showAudioOnly) {
-        allFormats.filter { it.isAudioOnly }
-    } else {
-        allFormats
-    }
+    val videoFormats = allFormats.filter { !it.isAudioOnly }
+    val audioFormats = allFormats.filter { it.isAudioOnly }
     val hasFormats = allFormats.isNotEmpty()
-    val hasAudioOnly = allFormats.any { it.isAudioOnly }
+    val hasVideo = videoFormats.isNotEmpty()
+    val hasAudioOnly = audioFormats.isNotEmpty()
+    val displayFormats = if (uiState.showAudioOnly) {
+        audioFormats
+    } else {
+        if (hasVideo) videoFormats else allFormats
+    }
     val selectedFormatId = uiState.selectedFormatIdsByItem[currentIndex]
     val selectedFormat = allFormats.firstOrNull { it.formatId == selectedFormatId }
 
@@ -255,6 +259,9 @@ internal fun PreviewScreen(
                 preview = preview,
                 formats = displayFormats,
                 hasAudioOnly = hasAudioOnly,
+                hasVideo = hasVideo,
+                videoFormatsCount = videoFormats.size,
+                audioFormatsCount = audioFormats.size,
                 hasAnyFormats = hasFormats,
                 audioOnlyEnabled = uiState.showAudioOnly,
                 selectedFormatId = selectedFormatId,
@@ -339,6 +346,9 @@ internal fun FormatPickerCard(
     preview: MediaPreview,
     formats: List<MediaFormat>,
     hasAudioOnly: Boolean,
+    hasVideo: Boolean = true,
+    videoFormatsCount: Int = 0,
+    audioFormatsCount: Int = 0,
     hasAnyFormats: Boolean,
     audioOnlyEnabled: Boolean,
     selectedFormatId: String?,
@@ -367,32 +377,116 @@ internal fun FormatPickerCard(
                 }
                 else -> {
                     Text(
-                        text = "Choose a resolution or audio-only stream.",
+                        text = "Choose a resolution or audio stream.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = LinkLiftTextSecondary,
                     )
 
-                    if (hasAudioOnly) {
+                    if (hasAudioOnly && hasVideo) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            val isVideoActive = !audioOnlyEnabled
+                            val isAudioActive = audioOnlyEnabled
+
+                            // Video tab
+                            Surface(
+                                onClick = { onAudioOnlyToggled(false) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isVideoActive) {
+                                    Color.White.copy(alpha = 0.15f)
+                                } else {
+                                    LinkLiftCard.copy(alpha = 0.6f)
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isVideoActive) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Videocam,
+                                        contentDescription = "Video",
+                                        tint = if (isVideoActive) Color.White else LinkLiftTextSecondary,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Video",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = if (isVideoActive) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isVideoActive) Color.White else LinkLiftTextSecondary,
+                                        )
+                                        if (videoFormatsCount > 0) {
+                                            Text(
+                                                text = "$videoFormatsCount ${if (videoFormatsCount == 1) "quality" else "qualities"}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = LinkLiftTextSecondary,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Audio tab
+                            Surface(
+                                onClick = { onAudioOnlyToggled(true) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isAudioActive) {
+                                    Color.White.copy(alpha = 0.15f)
+                                } else {
+                                    LinkLiftCard.copy(alpha = 0.6f)
+                                },
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isAudioActive) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Audiotrack,
+                                        contentDescription = "Audio",
+                                        tint = if (isAudioActive) Color.White else LinkLiftTextSecondary,
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Audio",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = if (isAudioActive) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isAudioActive) Color.White else LinkLiftTextSecondary,
+                                        )
+                                        if (audioFormatsCount > 0) {
+                                            Text(
+                                                text = "$audioFormatsCount ${if (audioFormatsCount == 1) "stream" else "streams"}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = LinkLiftTextSecondary,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else if (hasAudioOnly) {
                         Surface(
                             shape = RoundedCornerShape(16.dp),
-                            color = if (audioOnlyEnabled) {
-                                Color.White.copy(alpha = 0.12f)
-                            } else {
-                                LinkLiftCard.copy(alpha = 0.7f)
-                            },
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (audioOnlyEnabled) {
-                                    Color.White
-                                } else {
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                                },
-                            ),
+                            color = Color.White.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, Color.White),
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onAudioOnlyToggled(!audioOnlyEnabled) }
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -400,7 +494,7 @@ internal fun FormatPickerCard(
                                 Icon(
                                     imageVector = Icons.Rounded.Audiotrack,
                                     contentDescription = null,
-                                    tint = if (audioOnlyEnabled) Color.White else LinkLiftTextSecondary,
+                                    tint = Color.White,
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
@@ -409,23 +503,11 @@ internal fun FormatPickerCard(
                                         color = Color.White,
                                     )
                                     Text(
-                                        text = "Save only the audio track.",
+                                        text = "This item only has audio streams.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = LinkLiftTextSecondary,
                                     )
                                 }
-                                Switch(
-                                    checked = audioOnlyEnabled,
-                                    onCheckedChange = onAudioOnlyToggled,
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color(0xFF0F0F0F),
-                                        checkedTrackColor = Color.White,
-                                        checkedBorderColor = Color.White,
-                                        uncheckedThumbColor = Color.White,
-                                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                                        uncheckedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                                    ),
-                                )
                             }
                         }
                     }
