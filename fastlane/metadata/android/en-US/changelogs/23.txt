@@ -1,0 +1,6 @@
+- Dedicated Video (🎬) and Audio (🎵) tabs with live stream count badges in preview format card
+- Customizable default video quality settings (Best, 1080p, 720p, 480p, 360p, Smallest file, Ask every time)
+- Preferred video container codec (Auto, MP4, WebM) and audio format (Auto, M4A, WebM/Opus, MP3) in Settings
+- Smart format scoring and auto-selection matching target resolution and container preferences on link analysis
+- Improved device back button navigation across all screens with double-back press confirmation to exit on Dashboard
+- Download queue stability improvements and UI responsiveness optimizations
