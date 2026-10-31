@@ -1,0 +1,6 @@
+- Added automatic retry for blocked downloads immediately following YouTube sign-in or cookie import
+- Added manual "Retry download" and "Dismiss" action buttons on failed download items
+- Added interactive loading indicator ("Retrying...") during download retry attempts
+- Unified platform source tags (YouTube & Instagram) as branded InfoChips with brand icons across downloads and preview screens
+- Upgraded standalone PlatformBadge design with pill shape and brand icons
+- Enhanced YouTube and Instagram platform detection with robust URL and host fallbacks
