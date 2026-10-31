@@ -77,6 +77,7 @@ internal fun LinkLiftRoot(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             viewModel.refreshCookieStatus()
+            viewModel.retryPendingAuthDownload()
         }
     }
 
@@ -216,9 +217,17 @@ internal fun LinkLiftRoot(
                             onRemoveTracked = viewModel::removeTrackedDownloads,
                             onRegenerateTracked = viewModel::regenerateTrackedDownload,
                             onCancelDownload = viewModel::cancelDownload,
-                            onPromptYouTubeAuth = {
-                                viewModel.promptYouTubeAuth("A YouTube download was blocked. Sign in or import cookies to download this video.")
+                            onRetryDownload = { download ->
+                                ensureNotificationPermission()
+                                viewModel.retryDownload(download)
                             },
+                            onPromptYouTubeAuth = { download ->
+                                viewModel.promptYouTubeAuth(
+                                    reason = "A YouTube download was blocked. Sign in or import cookies to download this video.",
+                                    retryDownload = download,
+                                )
+                            },
+                            retryingDownloadIds = uiState.retryingDownloadIds,
                         )
                         AppScreen.Settings -> SettingsScreen(
                             preferences = uiState.settings,
@@ -255,11 +264,11 @@ internal fun LinkLiftRoot(
                 YouTubeAuthPromptDialog(
                     reason = uiState.youTubeAuthPromptReason,
                     onSignIn = {
-                        viewModel.dismissYouTubeAuthPrompt()
+                        viewModel.dismissYouTubeAuthPrompt(keepPendingRetry = true)
                         youTubeAuthLauncher.launch(YouTubeAuthActivity.createIntent(context))
                     },
                     onOpenSettings = {
-                        viewModel.dismissYouTubeAuthPrompt()
+                        viewModel.dismissYouTubeAuthPrompt(keepPendingRetry = true)
                         viewModel.openScreen(AppScreen.Settings)
                     },
                     onDismiss = viewModel::dismissYouTubeAuthPrompt,

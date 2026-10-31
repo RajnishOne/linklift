@@ -278,5 +278,6 @@ data class LinkLiftUiState(
     val showYouTubeAuthPrompt: Boolean = false,
     val youTubeAuthPromptReason: String? = null,
     val isFromShare: Boolean = false,
+    val retryingDownloadIds: Set<Long> = emptySet(),
 )
 

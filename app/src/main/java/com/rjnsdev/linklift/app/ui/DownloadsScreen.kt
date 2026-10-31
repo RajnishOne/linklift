@@ -10,12 +10,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -30,9 +32,13 @@ import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.PlayCircleOutline
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -57,6 +63,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -69,6 +76,7 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftBackground
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftError
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftSuccess
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRedBright
@@ -79,7 +87,9 @@ internal fun DownloadsScreen(
     onRemoveTracked: (Set<Long>) -> Unit,
     onRegenerateTracked: (String?) -> Unit,
     onCancelDownload: (Long) -> Unit,
-    onPromptYouTubeAuth: () -> Unit = {},
+    onRetryDownload: (DownloadEntry) -> Unit = {},
+    onPromptYouTubeAuth: (DownloadEntry) -> Unit = {},
+    retryingDownloadIds: Set<Long> = emptySet(),
 ) {
     val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
@@ -231,7 +241,9 @@ internal fun DownloadsScreen(
                         }
                     },
                     onCancel = { onCancelDownload(item.id) },
-                    onPromptYouTubeAuth = onPromptYouTubeAuth,
+                    onRetry = { onRetryDownload(item) },
+                    onPromptYouTubeAuth = { onPromptYouTubeAuth(item) },
+                    isRetrying = item.id in retryingDownloadIds,
                     selectionMode = selectionMode,
                     selected = item.id in selectedIds,
                     onSelectionChanged = { checked ->
@@ -252,7 +264,9 @@ private fun DownloadDetailCard(
     download: DownloadEntry,
     onOpen: (DownloadEntry) -> Unit,
     onCancel: () -> Unit,
+    onRetry: () -> Unit = {},
     onPromptYouTubeAuth: () -> Unit = {},
+    isRetrying: Boolean = false,
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onSelectionChanged: (Boolean) -> Unit = {},
@@ -321,6 +335,82 @@ private fun DownloadDetailCard(
                                 text = "YouTube Auth Required • Tap to Sign In",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = LinkLiftYouTubeRedBright,
+                            )
+                        }
+                    }
+                }
+
+                if (!selectionMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Button(
+                            onClick = onRetry,
+                            enabled = !isRetrying && !download.sourceUrl.isNullOrBlank(),
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White.copy(alpha = 0.14f),
+                                contentColor = Color.White,
+                                disabledContainerColor = Color.White.copy(alpha = 0.06f),
+                                disabledContentColor = LinkLiftTextMuted,
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(
+                                1.dp,
+                                if (!isRetrying && !download.sourceUrl.isNullOrBlank()) {
+                                    Color.White.copy(alpha = 0.3f)
+                                } else {
+                                    Color.White.copy(alpha = 0.1f)
+                                },
+                            ),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                        ) {
+                            if (isRetrying) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(15.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Retrying...",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.Refresh,
+                                    contentDescription = "Retry",
+                                    tint = if (!download.sourceUrl.isNullOrBlank()) Color.White else LinkLiftTextMuted,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Retry download",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (!download.sourceUrl.isNullOrBlank()) Color.White else LinkLiftTextMuted,
+                                )
+                            }
+                        }
+
+                        TextButton(
+                            onClick = onCancel,
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "Dismiss",
+                                tint = LinkLiftTextMuted,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Dismiss",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = LinkLiftTextMuted,
                             )
                         }
                     }

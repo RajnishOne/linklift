@@ -1464,29 +1464,149 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
      * system DownloadManager downloads) or aborts the merge service worker
      * (for merge jobs) and clears the entry from the tracked list.
      */
+    private suspend fun removeDownloadEntrySilently(downloadId: Long) {
+        if (isMergeJobDownloadId(downloadId)) {
+            val mergeJob = MergeJobStore.snapshot().values
+                .firstOrNull { mergeJobToDownloadId(it.id) == downloadId }
+            if (mergeJob != null) {
+                MergeDownloadService.cancel(appContext, mergeJob.id)
+                MergeJobStore.remove(appContext, setOf(mergeJob.id))
+            }
+        } else {
+            runCatching { downloadManager?.remove(downloadId) }
+            appContext.linkLiftDataStore.edit { prefs ->
+                val currentIds = prefs[PreferenceKeys.downloadIds]?.toMutableSet() ?: mutableSetOf()
+                currentIds.remove(downloadId.toString())
+                prefs[PreferenceKeys.downloadIds] = currentIds
+
+                val sourceUrls = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSourceUrls])
+                sourceUrls.remove(downloadId)
+                prefs[PreferenceKeys.downloadSourceUrls] = serializeDownloadSourceMap(sourceUrls)
+            }
+        }
+    }
+
     fun cancelDownload(downloadId: Long) {
         viewModelScope.launch {
-            if (isMergeJobDownloadId(downloadId)) {
-                val mergeJob = MergeJobStore.snapshot().values
-                    .firstOrNull { mergeJobToDownloadId(it.id) == downloadId }
-                if (mergeJob != null) {
-                    MergeDownloadService.cancel(appContext, mergeJob.id)
-                    MergeJobStore.remove(appContext, setOf(mergeJob.id))
-                }
-            } else {
-                runCatching { downloadManager?.remove(downloadId) }
-                appContext.linkLiftDataStore.edit { prefs ->
-                    val currentIds = prefs[PreferenceKeys.downloadIds]?.toMutableSet() ?: mutableSetOf()
-                    currentIds.remove(downloadId.toString())
-                    prefs[PreferenceKeys.downloadIds] = currentIds
-
-                    val sourceUrls = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSourceUrls])
-                    sourceUrls.remove(downloadId)
-                    prefs[PreferenceKeys.downloadSourceUrls] = serializeDownloadSourceMap(sourceUrls)
-                }
-            }
+            removeDownloadEntrySilently(downloadId)
             refreshDownloads()
             _uiState.update { it.copy(message = "Download cancelled.") }
+        }
+    }
+
+    fun retryDownload(download: DownloadEntry) {
+        val sourceUrl = download.sourceUrl
+        if (sourceUrl.isNullOrBlank()) {
+            _uiState.update {
+                it.copy(message = "Cannot retry: Original source URL is unavailable for this download.")
+            }
+            return
+        }
+
+        if (download.id in _uiState.value.retryingDownloadIds) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                retryingDownloadIds = it.retryingDownloadIds + download.id,
+                message = "Retrying download for ${download.title}...",
+            )
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val previewResult = runCatching {
+                    if (isInstagramHost(sourceUrl)) {
+                        inspectInstagramLink(url = sourceUrl)
+                    } else {
+                        resolveWithPythonOrFallback(sourceUrl)
+                    }
+                }.getOrElse { error ->
+                    val errorMsg = error.message.orEmpty()
+                    val isYt = isYouTubeUrl(sourceUrl)
+                    val hasCookies = CookieHelper.hasValidCookies(appContext)
+                    if (isYouTubeAuthRequired(isYt, hasCookies, errorMsg) || (isYt && !hasCookies)) {
+                        promptYouTubeAuth(
+                            reason = "YouTube requires authentication to download this video: $errorMsg",
+                            retryDownload = download,
+                        )
+                    }
+                    throw error
+                }
+
+                val primary = previewResult.items.firstOrNull()
+                    ?: throw IllegalArgumentException("No media streams found to download.")
+
+                val preferAudioOnly = download.kind == MediaKind.Audio
+                val preset = if (preferAudioOnly) {
+                    uiState.value.settings.preferredQuality
+                } else {
+                    uiState.value.settings.preferredQuality.takeIf { it != QualityPreset.AskEveryTime }
+                        ?: QualityPreset.BestQuality
+                }
+                val videoPref = uiState.value.settings.preferredVideoFormat
+                val audioPref = uiState.value.settings.preferredAudioFormat
+
+                val chosen = chooseFormatForPreset(
+                    formats = primary.formats,
+                    preset = preset,
+                    videoPref = videoPref,
+                    audioPref = audioPref,
+                    preferAudioOnly = preferAudioOnly,
+                ) ?: primary.formats.firstOrNull()
+
+                val currentTarget = uiState.value.targetSubfolder.takeIf { it.isNotBlank() }
+                    ?: uiState.value.settings.downloadSubfolder
+                val downloadLoc = defaultDownloadLocation(currentTarget)
+
+                // Remove the old failed download entry once resolved successfully
+                removeDownloadEntrySilently(download.id)
+
+                val useMergeService = chosen != null && shouldDownloadWithMergeService(chosen, sourceUrl)
+                if (useMergeService) {
+                    enqueueMergeJob(
+                        sourceUrl = sourceUrl,
+                        item = primary,
+                        format = chosen,
+                        subfolder = currentTarget,
+                    )
+                    _uiState.update {
+                        it.copy(
+                            currentScreen = AppScreen.Downloads,
+                            message = "Download restarted in $downloadLoc",
+                        )
+                    }
+                } else {
+                    val manager = downloadManager ?: run {
+                        _uiState.update { it.copy(message = "Download service is unavailable.") }
+                        return@launch
+                    }
+                    val resolved = resolveItemForDownload(primary, chosen?.formatId)
+                    enqueuePreviewItems(
+                        manager = manager,
+                        sourceUrl = sourceUrl,
+                        items = listOf(resolved),
+                        formats = listOf(chosen),
+                        subfolder = currentTarget,
+                    )
+                    _uiState.update {
+                        it.copy(
+                            currentScreen = AppScreen.Downloads,
+                            message = "Download restarted in $downloadLoc",
+                        )
+                    }
+                }
+                refreshDownloads()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(message = e.message ?: "Failed to restart download.")
+                }
+            } finally {
+                _uiState.update {
+                    it.copy(retryingDownloadIds = it.retryingDownloadIds - download.id)
+                }
+            }
         }
     }
 
@@ -3058,6 +3178,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    private var pendingAuthRetryDownload: DownloadEntry? = null
+
     fun importCookiesFromUri(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             val result = CookieHelper.importFromUri(appContext, uri)
@@ -3067,6 +3189,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     _uiState.update {
                         it.copy(message = "Successfully imported $count cookies!")
                     }
+                    retryPendingAuthDownload()
                 },
                 onFailure = { error ->
                     _uiState.update {
@@ -3086,6 +3209,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     _uiState.update {
                         it.copy(message = "Successfully saved $count cookies!")
                     }
+                    retryPendingAuthDownload()
                 },
                 onFailure = { error ->
                     _uiState.update {
@@ -3104,7 +3228,10 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun promptYouTubeAuth(reason: String? = null) {
+    fun promptYouTubeAuth(reason: String? = null, retryDownload: DownloadEntry? = null) {
+        if (retryDownload != null) {
+            pendingAuthRetryDownload = retryDownload
+        }
         _uiState.update {
             it.copy(
                 showYouTubeAuthPrompt = true,
@@ -3113,13 +3240,22 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun dismissYouTubeAuthPrompt() {
+    fun dismissYouTubeAuthPrompt(keepPendingRetry: Boolean = false) {
+        if (!keepPendingRetry) {
+            pendingAuthRetryDownload = null
+        }
         _uiState.update {
             it.copy(
                 showYouTubeAuthPrompt = false,
                 youTubeAuthPromptReason = null,
             )
         }
+    }
+
+    fun retryPendingAuthDownload() {
+        val pending = pendingAuthRetryDownload ?: return
+        pendingAuthRetryDownload = null
+        retryDownload(pending)
     }
 }
 
