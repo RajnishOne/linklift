@@ -1,0 +1,6 @@
+- Fixed in-app playback from Downloads tab to play downloaded files directly from device storage without re-buffering from YouTube
+- Enabled multi-scheme local playback support in player for content:// and file:// URIs under Android Scoped Storage
+- Fixed MediaMuxer IllegalArgumentException on 4K WebM downloads with interleaved track synchronization and dynamic buffer sizing
+- Enforced strictly monotonic presentation timestamps during video/audio merging
+- Improved format selection to respect preferred video containers (MP4 vs WebM)
+- Refactored downloads list item layout for improved visual clarity
