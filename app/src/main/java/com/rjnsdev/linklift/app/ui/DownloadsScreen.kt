@@ -385,13 +385,21 @@ private fun DownloadDetailCardProgress(
     sourceUrl: String? = null,
     onCancel: () -> Unit,
 ) {
+    val platform = getPlatformBrand(sourceUrl)
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (platform != null) {
+            InfoChip(
+                title = platform.name,
+                value = "Platform",
+                accentColor = platform.color,
+                icon = platform.icon,
+            )
+        }
         InfoChip(title = downloadStateLabel(state), value = "Status")
-        PlatformBadge(url = sourceUrl)
         InfoChip(title = formatBytes(downloadedBytes), value = "Downloaded")
         totalBytes?.let { InfoChip(title = formatBytes(it), value = "Total") }
     }
@@ -531,7 +539,20 @@ private fun DownloadedFileViewer(
                             style = MaterialTheme.typography.bodyMedium,
                             color = LinkLiftTextSecondary,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val platform = getPlatformBrand(download.sourceUrl)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (platform != null) {
+                                InfoChip(
+                                    title = platform.name,
+                                    value = "Platform",
+                                    accentColor = platform.color,
+                                    icon = platform.icon,
+                                )
+                            }
                             InfoChip(title = downloadStateLabel(download.state), value = "Status")
                             InfoChip(title = formatBytes(download.downloadedBytes), value = "Size")
                             download.mimeType?.let { InfoChip(title = it, value = "Type") }

@@ -425,7 +425,7 @@ private fun BatchEntryRow(
         modifier = if (isProcessing) Modifier else Modifier.clickable { onCheckedChange(!isChecked) },
     ) {
         val platform = getPlatformBrand(entry.sourceUrl, entry.host)
-        val brandColor = platform?.second ?: Color.White
+        val brandColor = platform?.color ?: Color.White
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -439,7 +439,7 @@ private fun BatchEntryRow(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        imageVector = Icons.Rounded.PlayCircleOutline,
+                        imageVector = platform?.icon ?: Icons.Rounded.PlayCircleOutline,
                         contentDescription = null,
                         tint = brandColor,
                     )

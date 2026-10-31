@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -53,14 +55,35 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
 import java.util.Locale
 
-internal fun getPlatformBrand(url: String?, host: String? = null): Pair<String, Color>? {
+data class PlatformBrand(
+    val name: String,
+    val color: Color,
+    val icon: ImageVector,
+) {
+    val first: String get() = name
+    val second: Color get() = color
+    val third: ImageVector get() = icon
+}
+
+internal fun getPlatformBrand(url: String?, host: String? = null): PlatformBrand? {
     if (!url.isNullOrBlank()) {
-        if (isYouTubeUrl(url)) return "YouTube" to LinkLiftYouTubeRed
-        if (isInstagramUrl(url)) return "Instagram" to LinkLiftInstagramPink
+        if (isYouTubeUrl(url)) return PlatformBrand("YouTube", LinkLiftYouTubeRed, Icons.Rounded.PlayArrow)
+        if (isInstagramUrl(url)) return PlatformBrand("Instagram", LinkLiftInstagramPink, Icons.Rounded.CameraAlt)
+        val lower = url.lowercase(Locale.ROOT)
+        if (lower.contains("youtube") || lower.contains("youtu.be")) {
+            return PlatformBrand("YouTube", LinkLiftYouTubeRed, Icons.Rounded.PlayArrow)
+        }
+        if (lower.contains("instagram") || lower.contains("instagr.am")) {
+            return PlatformBrand("Instagram", LinkLiftInstagramPink, Icons.Rounded.CameraAlt)
+        }
     }
     val h = host?.lowercase(Locale.ROOT).orEmpty()
-    if (h.contains("youtube") || h.contains("youtu.be")) return "YouTube" to LinkLiftYouTubeRed
-    if (h.contains("instagram") || h.contains("instagr.am")) return "Instagram" to LinkLiftInstagramPink
+    if (h.contains("youtube") || h.contains("youtu.be")) {
+        return PlatformBrand("YouTube", LinkLiftYouTubeRed, Icons.Rounded.PlayArrow)
+    }
+    if (h.contains("instagram") || h.contains("instagr.am")) {
+        return PlatformBrand("Instagram", LinkLiftInstagramPink, Icons.Rounded.CameraAlt)
+    }
     return null
 }
 
@@ -71,22 +94,33 @@ internal fun PlatformBadge(
     modifier: Modifier = Modifier,
 ) {
     val platform = getPlatformBrand(url, host) ?: return
-    val (name, color) = platform
+    val (name, color, icon) = platform
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(20.dp),
         color = color.copy(alpha = 0.16f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.45f)),
     ) {
-        Text(
-            text = name,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-            style = chipTextStyle(MaterialTheme.typography.labelSmall),
-            color = color,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            softWrap = false,
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(13.dp),
+            )
+            Text(
+                text = name,
+                style = chipTextStyle(MaterialTheme.typography.labelSmall),
+                color = color,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
     }
 }
 
@@ -199,8 +233,11 @@ internal fun InfoChip(
     title: String,
     value: String,
     accentColor: Color? = null,
+    icon: ImageVector? = null,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
+        modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
         border = androidx.compose.foundation.BorderStroke(
@@ -215,13 +252,27 @@ internal fun InfoChip(
             Text(
                 text = value,
                 style = MaterialTheme.typography.labelSmall,
-                color = accentColor ?: LinkLiftTextMuted,
+                color = accentColor?.copy(alpha = 0.85f) ?: LinkLiftTextMuted,
             )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                color = accentColor ?: Color.White,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = accentColor ?: Color.White,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accentColor ?: Color.White,
+                    fontWeight = if (accentColor != null) FontWeight.SemiBold else FontWeight.Medium,
+                )
+            }
         }
     }
 }

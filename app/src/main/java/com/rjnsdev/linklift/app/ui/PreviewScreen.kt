@@ -161,7 +161,12 @@ internal fun PreviewScreen(
                     ) {
                         val platform = getPlatformBrand(preview.sourceUrl, preview.host)
                         if (platform != null) {
-                            InfoChip(title = platform.first, value = "Platform", accentColor = platform.second)
+                            InfoChip(
+                                title = platform.name,
+                                value = "Platform",
+                                accentColor = platform.color,
+                                icon = platform.icon,
+                            )
                         } else {
                             InfoChip(title = preview.host, value = "Source")
                         }
