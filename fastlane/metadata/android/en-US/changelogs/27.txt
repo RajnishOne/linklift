@@ -1,0 +1,6 @@
+- Added video quality selection for playlist and batch downloads with an interactive quality picker dialog
+- Honored 'Ask every time' quality setting before starting playlist downloads
+- Fixed playlist downloading infinite loops and failure cycles on YouTube playlists
+- Normalized bare video IDs and relative paths in playlist items to full URLs
+- Added download concurrency limiting to prevent CDN rate limiting and connection aborts on large playlists
+- Added notification click navigation to take users directly to the Downloads screen
