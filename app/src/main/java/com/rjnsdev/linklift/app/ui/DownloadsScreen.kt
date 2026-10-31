@@ -266,10 +266,8 @@ private fun DownloadDetailCard(
                 state = download.state,
                 selectionMode = selectionMode,
                 selected = selected,
-                isActive = isActive,
                 sourceUrl = download.sourceUrl,
                 onSelectionChanged = onSelectionChanged,
-                onCancel = onCancel,
             )
             key(download.progress, download.downloadedBytes, download.totalBytes, download.state) {
                 DownloadDetailCardProgress(
@@ -329,10 +327,8 @@ private fun DownloadDetailCardHeader(
     state: DownloadState,
     selectionMode: Boolean,
     selected: Boolean,
-    isActive: Boolean,
     sourceUrl: String? = null,
     onSelectionChanged: (Boolean) -> Unit,
-    onCancel: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -371,14 +367,6 @@ private fun DownloadDetailCardHeader(
                     uncheckedColor = LinkLiftTextSecondary,
                 ),
             )
-        } else if (isActive) {
-            IconButton(onClick = onCancel) {
-                Icon(
-                    imageVector = Icons.Rounded.Close,
-                    contentDescription = "Cancel download",
-                    tint = LinkLiftError,
-                )
-            }
         }
     }
 }
