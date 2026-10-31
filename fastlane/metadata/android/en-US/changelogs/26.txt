@@ -1,0 +1,3 @@
+- Fixed MediaMuxer container mismatch by ensuring WebM and MP4 video streams strictly pair with compatible audio codecs (Opus for WebM, AAC for MP4)
+- Prioritized universally compatible MP4 video formats over WebM for Android playback
+- Enhanced retry handling for transient CDN chunk download failures
