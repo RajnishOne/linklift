@@ -15,10 +15,10 @@ _YTDLP_ANDROID_VR_BROKEN = _YTDLP_VERSION >= (2026, 8, 17)
 
 if _YTDLP_ANDROID_VR_BROKEN:
     _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["visionos", "web", "android"]
-    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["android", "ios", "mweb", "web"]
+    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["visionos", "android", "ios", "mweb", "web"]
 else:
     _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["android_vr", "android"]
-    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["android", "ios", "mweb", "web"]
+    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["visionos", "android", "ios", "mweb", "web"]
 
 _YT_DLP_BASE_OPTIONS = {
     "quiet": True,
@@ -265,6 +265,8 @@ def _format_payload(fmt):
         "is_video_only": is_video_only,
         "is_progressive": is_progressive,
         "http_headers": {str(k): str(v) for k, v in http_headers.items() if v},
+        "language_preference": fmt.get("language_preference"),
+        "format_note": fmt.get("format_note"),
     }
 
 
@@ -279,12 +281,27 @@ def _pick_audio_pair(video_fmt, audio_pool):
     if not audio_pool:
         return None
 
-    # For YouTube / GoogleVideo, itag 140 (m4a/aac) is the only audio stream that reliably streams without 403
+    def _audio_preference_key(a):
+        lp = a.get("language_preference")
+        note = str(a.get("format_note") or "").lower()
+        is_orig = 1 if "original" in note or "default" in note else 0
+        return (
+            lp if lp is not None else 0,
+            is_orig,
+            (a.get("abr") or 0),
+            (a.get("filesize") or 0),
+        )
+
+    # For YouTube / GoogleVideo, prefer itag 140 (m4a/aac) with highest language preference / original track
     v_url = (video_fmt.get("media_url") or video_fmt.get("url") or "").lower()
     if "googlevideo.com" in v_url:
-        it140 = [a for a in audio_pool if str(a.get("format_id") or "").strip() == "140"]
+        it140 = [
+            a for a in audio_pool
+            if str(a.get("format_id") or "").strip() == "140"
+            or str(a.get("format_id") or "").strip().startswith("140-")
+        ]
         if it140:
-            return it140[0]
+            return max(it140, key=_audio_preference_key)
 
     video_ext = (video_fmt.get("ext") or "").lower()
     if video_ext in _MP4_FAMILY_EXTS:
@@ -300,14 +317,7 @@ def _pick_audio_pair(video_fmt, audio_pool):
         if narrowed:
             pool = narrowed
 
-    return max(
-        pool,
-        key=lambda a: (
-            (a.get("abr") or 0),
-            (a.get("filesize") or 0),
-        ),
-        default=None,
-    )
+    return max(pool, key=_audio_preference_key, default=None)
 
 
 def _entry_formats(entry):
@@ -371,12 +381,31 @@ def _entry_formats(entry):
     # Drop video-only formats that couldn't be paired (we can't deliver a playable file).
     video_only_paired = [v for v in video_only_sorted if v.get("merge_audio")]
 
-    # Dedupe audio-only per ext, prefer m4a/mp4 then webm.
+    # Dedupe audio-only per ext, prefer m4a/mp4 then webm, prioritizing preferred/original language tracks.
     audio_by_ext = {}
     for fmt in audio_only:
         ext_key = fmt.get("ext")
         existing = audio_by_ext.get(ext_key)
-        if not existing or (fmt.get("abr") or 0) > (existing.get("abr") or 0):
+        lp = fmt.get("language_preference")
+        note = str(fmt.get("format_note") or "").lower()
+        is_orig = 1 if "original" in note or "default" in note else 0
+        fmt_key = (
+            lp if lp is not None else 0,
+            is_orig,
+            fmt.get("abr") or 0,
+        )
+        if existing:
+            e_lp = existing.get("language_preference")
+            e_note = str(existing.get("format_note") or "").lower()
+            e_orig = 1 if "original" in e_note or "default" in e_note else 0
+            existing_key = (
+                e_lp if e_lp is not None else 0,
+                e_orig,
+                existing.get("abr") or 0,
+            )
+        else:
+            existing_key = None
+        if not existing or fmt_key > existing_key:
             audio_by_ext[ext_key] = fmt
     audio_priority = {"m4a": 0, "mp4": 1, "aac": 2, "mp3": 3, "ogg": 4, "opus": 5, "webm": 6}
     audio_formats = sorted(
