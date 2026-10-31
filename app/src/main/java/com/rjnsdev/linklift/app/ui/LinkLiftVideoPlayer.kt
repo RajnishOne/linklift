@@ -100,6 +100,7 @@ import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import okhttp3.OkHttpClient
@@ -174,11 +175,12 @@ fun LinkLiftVideoPlayer(
     val exoPlayer = remember(mediaUri, audioUri, httpHeaders) {
         val builder = ExoPlayer.Builder(context)
 
-        val isGoogleVideo = mediaUri.contains("googlevideo.com") || (audioUri?.contains("googlevideo.com") == true)
+        val isLocalMedia = mediaUri.startsWith("content://") || mediaUri.startsWith("file://")
+        val isGoogleVideo = !isLocalMedia && (mediaUri.contains("googlevideo.com") || (audioUri?.contains("googlevideo.com") == true))
         val extractionUserAgent = httpHeaders.entries
             .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
         val effectiveUserAgent = extractionUserAgent ?: linkLiftUserAgent
-        android.util.Log.d("LinkLiftVideoPlayer", "Init player: mediaUri=$mediaUri, audioUri=$audioUri, UA=$effectiveUserAgent")
+        android.util.Log.d("LinkLiftVideoPlayer", "Init player: mediaUri=$mediaUri, audioUri=$audioUri, UA=$effectiveUserAgent, isLocal=$isLocalMedia")
 
         val sanitizedHeaders = mutableMapOf<String, String>()
         httpHeaders.forEach { (name, value) ->
@@ -208,14 +210,18 @@ fun LinkLiftVideoPlayer(
                 setDefaultRequestProperties(sanitizedHeaders)
             }
         }
-        val mediaSourceFactory = DefaultMediaSourceFactory(ChunkedHttpDataSource.Factory(okHttpDataSourceFactory))
+        val defaultDataSourceFactory = DefaultDataSource.Factory(
+            context,
+            ChunkedHttpDataSource.Factory(okHttpDataSourceFactory)
+        )
+        val mediaSourceFactory = DefaultMediaSourceFactory(defaultDataSourceFactory)
         builder.setMediaSourceFactory(mediaSourceFactory)
 
         val player = builder.build()
 
         val videoSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(mediaUri))
         val hasYouTubeCookies = CookieHelper.hasValidCookies(context)
-        val shouldMergeAudio = !audioUri.isNullOrBlank() && (!isGoogleVideo || hasYouTubeCookies)
+        val shouldMergeAudio = !isLocalMedia && !audioUri.isNullOrBlank() && (!isGoogleVideo || hasYouTubeCookies)
         val finalSource = if (shouldMergeAudio) {
             val audioSource = mediaSourceFactory.createMediaSource(MediaItem.fromUri(audioUri!!))
             MergingMediaSource(videoSource, audioSource)
@@ -240,9 +246,10 @@ fun LinkLiftVideoPlayer(
         val listener = object : Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 android.util.Log.e("LinkLiftVideoPlayer", "ExoPlayer error [${error.errorCodeName} / ${error.errorCode}]: ${error.message}", error)
+                val isLocalMedia = mediaUri.startsWith("content://") || mediaUri.startsWith("file://")
                 val hasYouTubeCookies = CookieHelper.hasValidCookies(context)
-                val isGoogleVideo = mediaUri.contains("googlevideo.com") || (audioUri?.contains("googlevideo.com") == true)
-                val shouldMergeAudio = !audioUri.isNullOrBlank() && (!isGoogleVideo || hasYouTubeCookies)
+                val isGoogleVideo = !isLocalMedia && (mediaUri.contains("googlevideo.com") || (audioUri?.contains("googlevideo.com") == true))
+                val shouldMergeAudio = !isLocalMedia && !audioUri.isNullOrBlank() && (!isGoogleVideo || hasYouTubeCookies)
                 if (shouldMergeAudio && !didFallbackToVideoOnly) {
                     didFallbackToVideoOnly = true
                     android.util.Log.w("LinkLiftVideoPlayer", "Audio merge failed; falling back to video-only preview")
@@ -257,14 +264,22 @@ fun LinkLiftVideoPlayer(
                         val okHttpFactory = OkHttpDataSource.Factory(okHttpClient).apply {
                             setUserAgent(extractionUserAgent ?: linkLiftUserAgent)
                         }
-                        DefaultMediaSourceFactory(ChunkedHttpDataSource.Factory(okHttpFactory)).createMediaSource(videoItem)
+                        val defaultFactory = DefaultDataSource.Factory(
+                            context,
+                            ChunkedHttpDataSource.Factory(okHttpFactory)
+                        )
+                        DefaultMediaSourceFactory(defaultFactory).createMediaSource(videoItem)
                     }
                     exoPlayer.setMediaSource(fallbackSource)
                     exoPlayer.prepare()
                     exoPlayer.play()
                     return
                 }
-                playerError = "Live stream preview is unavailable for this format (HTTP 403 / restricted stream). You can still download the video directly below."
+                playerError = if (isLocalMedia) {
+                    "Unable to play this local media file."
+                } else {
+                    "Live stream preview is unavailable for this format (HTTP 403 / restricted stream). You can still download the video directly below."
+                }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {

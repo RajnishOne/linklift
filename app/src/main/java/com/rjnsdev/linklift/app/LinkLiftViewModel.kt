@@ -2904,7 +2904,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 cursor.use {
                     while (it.moveToNext()) {
                         val downloadId = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
-                        add(it.toDownloadEntry(sourceUrl = sourceUrls[downloadId]))
+                        add(it.toDownloadEntry(sourceUrl = sourceUrls[downloadId], manager = manager))
                     }
                 }
             }
@@ -2966,12 +2966,15 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }.toString()
     }
 
-    private fun Cursor.toDownloadEntry(sourceUrl: String?): DownloadEntry {
+    private fun Cursor.toDownloadEntry(
+        sourceUrl: String?,
+        manager: DownloadManager? = null,
+    ): DownloadEntry {
         val id = getLong(getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
         val title = getString(getColumnIndexOrThrow(DownloadManager.COLUMN_TITLE)).orEmpty()
         val description = getString(getColumnIndexOrThrow(DownloadManager.COLUMN_DESCRIPTION)).orEmpty()
         val mimeType = getString(getColumnIndexOrThrow(DownloadManager.COLUMN_MEDIA_TYPE))
-        val localUri = getString(getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+        val rawLocalUri = getString(getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
         val downloadedBytes = getLong(getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
         val totalBytesRaw = getLong(getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
         val totalBytes = totalBytesRaw.takeIf { it > 0L }
@@ -2987,6 +2990,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             DownloadManager.STATUS_PAUSED -> DownloadState.Paused
             DownloadManager.STATUS_SUCCESSFUL -> DownloadState.Completed
             else -> DownloadState.Failed
+        }
+
+        val localUri = if (state == DownloadState.Completed && manager != null) {
+            runCatching { manager.getUriForDownloadedFile(id)?.toString() }.getOrNull()
+                ?.takeIf { it.isNotBlank() } ?: rawLocalUri
+        } else {
+            rawLocalUri
         }
 
         return DownloadEntry(

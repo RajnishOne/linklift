@@ -34,26 +34,51 @@ internal fun openDownloadedFile(context: Context, localUri: String, mimeType: St
 internal fun isDownloadedMediaAvailable(context: Context, localUri: String?): Boolean {
     if (localUri.isNullOrBlank()) return false
 
-    val uri = Uri.parse(localUri)
+    val trimmed = localUri.trim()
+    val uri = when {
+        trimmed.startsWith("/") -> Uri.fromFile(File(trimmed))
+        else -> Uri.parse(trimmed)
+    }
+
     return when (uri.scheme?.lowercase(Locale.ROOT)) {
-        "file" -> uri.path?.let { File(it).exists() } == true
+        "file" -> {
+            val path = uri.path
+            if (path != null && runCatching { File(path).exists() }.getOrDefault(false)) {
+                true
+            } else {
+                runCatching {
+                    val resolved = resolvableDownloadedUri(context, trimmed)
+                    context.contentResolver.openFileDescriptor(resolved, "r")?.use { true }
+                        ?: context.contentResolver.openInputStream(resolved)?.use { true }
+                        ?: false
+                }.getOrDefault(false)
+            }
+        }
         "content" -> runCatching {
-            context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { true }
+                ?: context.contentResolver.openInputStream(uri)?.use { true }
+                ?: false
         }.getOrDefault(false)
         else -> false
     }
 }
 
 internal fun resolvableDownloadedUri(context: Context, localUri: String): Uri {
-    val uri = Uri.parse(localUri)
+    val trimmed = localUri.trim()
+    val uri = when {
+        trimmed.startsWith("/") -> Uri.fromFile(File(trimmed))
+        else -> Uri.parse(trimmed)
+    }
     if (!uri.scheme.equals("file", ignoreCase = true)) return uri
 
     val filePath = uri.path ?: return uri
-    return FileProvider.getUriForFile(
-        context,
-        "${context.packageName}.fileprovider",
-        File(filePath),
-    )
+    return runCatching {
+        FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            File(filePath),
+        )
+    }.getOrDefault(uri)
 }
 
 internal fun resolveDownloadedMimeType(

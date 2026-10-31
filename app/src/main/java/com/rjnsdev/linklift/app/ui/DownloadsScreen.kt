@@ -101,7 +101,7 @@ internal fun DownloadsScreen(
         }
     }
 
-    viewerDownload?.takeIf { isDownloadedMediaAvailable(context, it.localUri) }?.let { download ->
+    viewerDownload?.let { download ->
         DownloadedFileViewer(
             download = download,
             onDismiss = { viewerDownload = null },
@@ -215,8 +215,19 @@ internal fun DownloadsScreen(
                     onOpen = { download ->
                         if (isDownloadedMediaAvailable(context, download.localUri)) {
                             viewerDownload = download
-                        } else {
+                        } else if (!download.sourceUrl.isNullOrBlank()) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Downloaded file not found on device. Re-analyzing link...",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                             onRegenerateTracked(download.sourceUrl)
+                        } else {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Downloaded file is no longer available on this device.",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
                         }
                     },
                     onCancel = { onCancelDownload(item.id) },
@@ -420,7 +431,8 @@ private fun DownloadedFileViewer(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val localUri = download.localUri ?: return
+    val rawLocalUri = download.localUri ?: return
+    val localUri = resolvableDownloadedUri(context, rawLocalUri).toString()
 
     Dialog(
         onDismissRequest = onDismiss,
