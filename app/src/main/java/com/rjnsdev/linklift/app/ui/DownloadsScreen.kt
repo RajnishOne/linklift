@@ -266,7 +266,6 @@ private fun DownloadDetailCard(
                 state = download.state,
                 selectionMode = selectionMode,
                 selected = selected,
-                sourceUrl = download.sourceUrl,
                 onSelectionChanged = onSelectionChanged,
             )
             key(download.progress, download.downloadedBytes, download.totalBytes, download.state) {
@@ -277,6 +276,7 @@ private fun DownloadDetailCard(
                     totalBytes = download.totalBytes,
                     selectionMode = selectionMode,
                     isActive = isActive,
+                    sourceUrl = download.sourceUrl,
                     onCancel = onCancel,
                 )
             }
@@ -327,7 +327,6 @@ private fun DownloadDetailCardHeader(
     state: DownloadState,
     selectionMode: Boolean,
     selected: Boolean,
-    sourceUrl: String? = null,
     onSelectionChanged: (Boolean) -> Unit,
 ) {
     Row(
@@ -337,20 +336,13 @@ private fun DownloadDetailCardHeader(
     ) {
         DownloadThumbnail(kind = kind, state = state, large = true)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                PlatformBadge(url = sourceUrl)
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             ExpandableDescriptionText(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
@@ -379,10 +371,16 @@ private fun DownloadDetailCardProgress(
     totalBytes: Long?,
     selectionMode: Boolean,
     isActive: Boolean,
+    sourceUrl: String? = null,
     onCancel: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         InfoChip(title = downloadStateLabel(state), value = "Status")
+        PlatformBadge(url = sourceUrl)
         InfoChip(title = formatBytes(downloadedBytes), value = "Downloaded")
         totalBytes?.let { InfoChip(title = formatBytes(it), value = "Total") }
     }
