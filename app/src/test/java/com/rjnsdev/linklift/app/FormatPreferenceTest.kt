@@ -217,4 +217,110 @@ class FormatPreferenceTest {
         assertEquals("18", chosenVideo?.formatId)
         assertEquals(false, chosenVideo?.isAudioOnly)
     }
+
+    @Test
+    fun chooseFormatForPreset_bestQuality_prefersMp4OverWebm_whenAnyPreference() {
+        val webm4k = MediaFormat(
+            formatId = "313",
+            label = "2160p WebM",
+            mediaUrl = "https://example.com/2160p.webm",
+            mimeType = "video/webm",
+            kind = MediaKind.Video,
+            ext = "webm",
+            height = 2160,
+            width = 3840,
+            fps = 30,
+            abr = null,
+            tbr = 10000, // Higher tbr than MP4
+            fileSizeBytes = 50000000L,
+            fileSizeApprox = false,
+            isAudioOnly = false,
+            isProgressive = false,
+            isVideoOnly = true,
+        )
+        val mp44k = MediaFormat(
+            formatId = "401",
+            label = "2160p MP4",
+            mediaUrl = "https://example.com/2160p.mp4",
+            mimeType = "video/mp4",
+            kind = MediaKind.Video,
+            ext = "mp4",
+            height = 2160,
+            width = 3840,
+            fps = 30,
+            abr = null,
+            tbr = 4500, // Lower tbr than WebM
+            fileSizeBytes = 25000000L,
+            fileSizeApprox = false,
+            isAudioOnly = false,
+            isProgressive = false,
+            isVideoOnly = true,
+        )
+        val formats = listOf(webm4k, mp44k)
+
+        val chosenAny = chooseFormatForPreset(
+            formats = formats,
+            preset = QualityPreset.BestQuality,
+            videoPref = VideoFormatPreference.Any,
+        )
+        assertEquals("401", chosenAny?.formatId)
+        assertEquals("mp4", chosenAny?.ext)
+
+        val chosenWebm = chooseFormatForPreset(
+            formats = formats,
+            preset = QualityPreset.BestQuality,
+            videoPref = VideoFormatPreference.Webm,
+        )
+        assertEquals("313", chosenWebm?.formatId)
+        assertEquals("webm", chosenWebm?.ext)
+    }
+
+    @Test
+    fun chooseFormatForPreset_resolutionPreset_prefersMp4OverWebm_whenAnyPreference() {
+        val webm720 = MediaFormat(
+            formatId = "247",
+            label = "720p WebM",
+            mediaUrl = "https://example.com/720p.webm",
+            mimeType = "video/webm",
+            kind = MediaKind.Video,
+            ext = "webm",
+            height = 720,
+            width = 1280,
+            fps = 30,
+            abr = null,
+            tbr = 850, // Higher tbr than MP4
+            fileSizeBytes = 10000000L,
+            fileSizeApprox = false,
+            isAudioOnly = false,
+            isProgressive = false,
+            isVideoOnly = true,
+        )
+        val mp4720 = MediaFormat(
+            formatId = "136",
+            label = "720p MP4",
+            mediaUrl = "https://example.com/720p.mp4",
+            mimeType = "video/mp4",
+            kind = MediaKind.Video,
+            ext = "mp4",
+            height = 720,
+            width = 1280,
+            fps = 30,
+            abr = null,
+            tbr = 550, // Lower tbr than WebM
+            fileSizeBytes = 7000000L,
+            fileSizeApprox = false,
+            isAudioOnly = false,
+            isProgressive = false,
+            isVideoOnly = true,
+        )
+        val formats = listOf(webm720, mp4720)
+
+        val chosen = chooseFormatForPreset(
+            formats = formats,
+            preset = QualityPreset.Res720p,
+            videoPref = VideoFormatPreference.Any,
+        )
+        assertEquals("136", chosen?.formatId)
+        assertEquals("mp4", chosen?.ext)
+    }
 }

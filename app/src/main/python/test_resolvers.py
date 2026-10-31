@@ -126,6 +126,39 @@ class TestGenericMediaResolver(unittest.TestCase):
         pair_webm = _pick_audio_pair(video_webm, [audio_m4a, audio_opus])
         self.assertEqual(pair_webm["ext"], "opus")
 
+        # GoogleVideo (YouTube): MP4 video must pair with itag 140 (m4a), WebM video must pair with itag 251 (opus)
+        audio_yt_140 = {
+            "format_id": "140-drc",
+            "ext": "m4a",
+            "url": "https://rr1---sn-xxx.googlevideo.com/videoplayback",
+            "abr": 129,
+            "vcodec": "none",
+            "acodec": "mp4a.40.2",
+        }
+        audio_yt_251 = {
+            "format_id": "251-drc",
+            "ext": "webm",
+            "url": "https://rr1---sn-xxx.googlevideo.com/videoplayback",
+            "abr": 114,
+            "vcodec": "none",
+            "acodec": "opus",
+        }
+        video_yt_mp4 = {
+            "ext": "mp4",
+            "url": "https://rr1---sn-xxx.googlevideo.com/videoplayback",
+        }
+        video_yt_webm = {
+            "ext": "webm",
+            "url": "https://rr1---sn-xxx.googlevideo.com/videoplayback",
+        }
+        yt_pair_mp4 = _pick_audio_pair(video_yt_mp4, [audio_yt_140, audio_yt_251])
+        self.assertEqual(yt_pair_mp4["format_id"], "140-drc")
+        self.assertEqual(yt_pair_mp4["ext"], "m4a")
+
+        yt_pair_webm = _pick_audio_pair(video_yt_webm, [audio_yt_140, audio_yt_251])
+        self.assertEqual(yt_pair_webm["format_id"], "251-drc")
+        self.assertEqual(yt_pair_webm["ext"], "webm")
+
     def test_entry_formats_pairing_and_deduplication(self):
         entry = {
             "formats": [

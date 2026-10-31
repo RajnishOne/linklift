@@ -573,10 +573,11 @@ class MergeDownloadService : Service() {
                 response.use { resp ->
                     if (!resp.isSuccessful) {
                         val isYt = url.contains("googlevideo.com")
+                        val retryNote = if (isRetryableHttpCode(resp.code)) " (retryable)" else ""
                         val detail = if (resp.code == 403 && isYt) {
                             "HTTP 403 (GoogleVideo CDN rejected range $bytesSoFar-$chunkEnd)"
                         } else {
-                            "HTTP ${resp.code}"
+                            "HTTP ${resp.code}$retryNote"
                         }
                         throw IOException("Download chunk failed: $detail for $chunkUrl")
                     }

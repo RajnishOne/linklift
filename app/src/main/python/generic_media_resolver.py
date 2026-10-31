@@ -278,6 +278,15 @@ def _strip_payload_for_pair(payload):
 
 
 def _pick_audio_pair(video_fmt, audio_pool):
+    """Pick the best compatible audio track for a video-only format.
+
+    Rules:
+      1. Container matching: MP4 video prefers MP4/M4A/AAC audio; WebM video prefers WebM/Opus audio.
+      2. Quality preference: Higher language_preference (user/original language) -> higher abr -> larger size.
+      3. For YouTube / googlevideo.com:
+         - For MP4 video, prefer itag 140 (m4a/aac) with highest language preference / original track.
+         - For WebM video, prefer itag 251 (webm/opus) with highest language preference / original track.
+    """
     if not audio_pool:
         return None
 
@@ -292,30 +301,33 @@ def _pick_audio_pair(video_fmt, audio_pool):
             (a.get("filesize") or 0),
         )
 
-    # For YouTube / GoogleVideo, prefer itag 140 (m4a/aac) with highest language preference / original track
-    v_url = (video_fmt.get("media_url") or video_fmt.get("url") or "").lower()
-    if "googlevideo.com" in v_url:
-        it140 = [
-            a for a in audio_pool
-            if str(a.get("format_id") or "").strip() == "140"
-            or str(a.get("format_id") or "").strip().startswith("140-")
-        ]
-        if it140:
-            return max(it140, key=_audio_preference_key)
-
     video_ext = (video_fmt.get("ext") or "").lower()
     if video_ext in _MP4_FAMILY_EXTS:
-        preferred = _MP4_AUDIO_EXTS
+        preferred_exts = _MP4_AUDIO_EXTS
+        yt_preferred_itag = "140"
     elif video_ext in _WEBM_FAMILY_EXTS:
-        preferred = _WEBM_AUDIO_EXTS
+        preferred_exts = _WEBM_AUDIO_EXTS
+        yt_preferred_itag = "251"
     else:
-        preferred = None
+        preferred_exts = None
+        yt_preferred_itag = None
 
     pool = audio_pool
-    if preferred:
-        narrowed = [a for a in audio_pool if (a.get("ext") or "").lower() in preferred]
+    if preferred_exts:
+        narrowed = [a for a in audio_pool if (a.get("ext") or "").lower() in preferred_exts]
         if narrowed:
             pool = narrowed
+
+    # For YouTube / GoogleVideo, prefer itag 140 for MP4 or itag 251 for WebM
+    v_url = (video_fmt.get("media_url") or video_fmt.get("url") or "").lower()
+    if "googlevideo.com" in v_url and yt_preferred_itag:
+        yt_candidates = [
+            a for a in pool
+            if str(a.get("format_id") or "").strip() == yt_preferred_itag
+            or str(a.get("format_id") or "").strip().startswith(yt_preferred_itag + "-")
+        ]
+        if yt_candidates:
+            return max(yt_candidates, key=_audio_preference_key)
 
     return max(pool, key=_audio_preference_key, default=None)
 
@@ -361,7 +373,11 @@ def _entry_formats(entry):
             video_only_dedup[key] = fmt
     video_only_sorted = sorted(
         video_only_dedup.values(),
-        key=lambda f: (-(f.get("height") or 0), -(f.get("tbr") or 0)),
+        key=lambda f: (
+            -(f.get("height") or 0),
+            0 if (f.get("ext") or "").lower() in _MP4_FAMILY_EXTS else 1,
+            -(f.get("tbr") or 0),
+        ),
     )
 
     # Pair each video-only with the best matching audio-only.
@@ -427,7 +443,12 @@ def _entry_formats(entry):
     if not combined_videos and video_only_sorted:
         combined_videos = video_only_sorted
 
-    combined_videos.sort(key=lambda f: (-(f.get("height") or 0), 0 if f.get("is_progressive") else 1))
+    combined_videos.sort(key=lambda f: (
+        -(f.get("height") or 0),
+        0 if (f.get("ext") or "").lower() in _MP4_FAMILY_EXTS else 1,
+        0 if f.get("is_progressive") else 1,
+        -(f.get("tbr") or 0),
+    ))
 
     return combined_videos + audio_formats
 

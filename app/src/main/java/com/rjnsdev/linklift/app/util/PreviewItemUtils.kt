@@ -126,16 +126,31 @@ internal fun chooseFormatForPreset(
         return chooseAudioFormat(audioOnlyFormats, audioPref)
     }
 
-    fun matchesVideoPref(format: MediaFormat): Boolean {
+    fun pickBestCandidate(candidates: List<MediaFormat>): MediaFormat? {
+        if (candidates.isEmpty()) return null
         return when (videoPref) {
-            VideoFormatPreference.Any -> true
-            VideoFormatPreference.Mp4 -> format.ext.equals("mp4", ignoreCase = true)
-            VideoFormatPreference.Webm -> format.ext.equals("webm", ignoreCase = true)
+            VideoFormatPreference.Mp4 -> {
+                candidates.filter { it.ext.equals("mp4", ignoreCase = true) }.maxByOrNull { it.tbr ?: 0 }
+                    ?: candidates.maxByOrNull { it.tbr ?: 0 }
+            }
+            VideoFormatPreference.Webm -> {
+                candidates.filter { it.ext.equals("webm", ignoreCase = true) }.maxByOrNull { it.tbr ?: 0 }
+                    ?: candidates.maxByOrNull { it.tbr ?: 0 }
+            }
+            VideoFormatPreference.Any -> {
+                // When preference is Any, prefer MP4 for universal Android playback/sharing compatibility
+                candidates.filter { it.ext.equals("mp4", ignoreCase = true) }.maxByOrNull { it.tbr ?: 0 }
+                    ?: candidates.maxByOrNull { it.tbr ?: 0 }
+            }
         }
     }
 
     fun videoScore(format: MediaFormat): Long {
-        val prefBonus = if (matchesVideoPref(format)) 10_000_000L else 0L
+        val prefBonus = when (videoPref) {
+            VideoFormatPreference.Mp4 -> if (format.ext.equals("mp4", ignoreCase = true)) 10_000_000L else 0L
+            VideoFormatPreference.Webm -> if (format.ext.equals("webm", ignoreCase = true)) 10_000_000L else 0L
+            VideoFormatPreference.Any -> if (format.ext.equals("mp4", ignoreCase = true)) 5_000_000L else 0L
+        }
         val resScore = (format.height ?: 0) * 100_000L
         val bitrateScore = (format.tbr ?: 0).toLong()
         return prefBonus + resScore + bitrateScore
@@ -153,8 +168,7 @@ internal fun chooseFormatForPreset(
         QualityPreset.BestQuality, QualityPreset.AskEveryTime -> {
             val maxHeight = videoFormats.mapNotNull { it.height }.maxOrNull() ?: 0
             val candidatesAtMax = videoFormats.filter { (it.height ?: 0) == maxHeight }
-            candidatesAtMax.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
-                ?: candidatesAtMax.maxByOrNull { it.tbr ?: 0 }
+            pickBestCandidate(candidatesAtMax)
                 ?: videoFormats.maxByOrNull { videoScore(it) }
                 ?: videoFormats.first()
         }
@@ -162,16 +176,13 @@ internal fun chooseFormatForPreset(
             val target = preset.targetHeight ?: 1080
             val exactMatches = videoFormats.filter { (it.height ?: 0) == target }
             if (exactMatches.isNotEmpty()) {
-                exactMatches.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
-                    ?: exactMatches.maxByOrNull { it.tbr ?: 0 }
+                pickBestCandidate(exactMatches)
             } else {
                 val lowerMatches = videoFormats.filter { (it.height ?: 0) <= target }
                 val candidatePool = lowerMatches.ifEmpty { videoFormats }
                 val bestHeight = candidatePool.mapNotNull { it.height }.maxOrNull() ?: 0
                 val atBestHeight = candidatePool.filter { (it.height ?: 0) == bestHeight }
-                atBestHeight.filter { matchesVideoPref(it) }.maxByOrNull { it.tbr ?: 0 }
-                    ?: atBestHeight.maxByOrNull { it.tbr ?: 0 }
-                    ?: candidatePool.firstOrNull()
+                pickBestCandidate(atBestHeight) ?: candidatePool.firstOrNull()
             } ?: videoFormats.maxByOrNull { videoScore(it) } ?: videoFormats.first()
         }
     }
