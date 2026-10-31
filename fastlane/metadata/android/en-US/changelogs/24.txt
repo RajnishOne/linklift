@@ -1,0 +1,5 @@
+- Added audio and video format selection for playlist downloads in Batch screen
+- Prioritized non-web clients for authenticated YouTube requests and improved private playlist resolution
+- Fixed HTTP 403 errors on Google Video CDN chunks using query parameter range sequencing
+- Enhanced cookie storage and deduplication to prevent corruption during YouTube authentication
+- Improved download reliability, authentication prompts, and expanded test coverage
