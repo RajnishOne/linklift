@@ -698,12 +698,20 @@ class MergeDownloadService : Service() {
             val outAudioIndex = muxer.addTrack(audioTrack.format)
             muxer.start()
 
-            val bufferSize = pickBufferSize(videoTrack.format) + pickBufferSize(audioTrack.format)
-            val buffer = ByteBuffer.allocate(bufferSize.coerceAtLeast(1024 * 1024))
-            val info = MediaCodec.BufferInfo()
+            val initialBufferSize = maxOf(
+                pickBufferSize(videoTrack.format),
+                pickBufferSize(audioTrack.format),
+                4 * 1024 * 1024 // 4 MB default for high-bitrate / 4K frames
+            )
 
-            copyTrack(videoExtractor, muxer, outVideoIndex, buffer, info)
-            copyTrack(audioExtractor, muxer, outAudioIndex, buffer, info)
+            muxTracksInterleaved(
+                videoExtractor = videoExtractor,
+                videoTrackIndex = outVideoIndex,
+                audioExtractor = audioExtractor,
+                audioTrackIndex = outAudioIndex,
+                muxer = muxer,
+                initialBufferSize = initialBufferSize,
+            )
 
             success = true
         } finally {
@@ -733,25 +741,84 @@ class MergeDownloadService : Service() {
     private fun pickBufferSize(format: MediaFormat): Int {
         return runCatching {
             format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
-        }.getOrDefault(256 * 1024)
+        }.getOrDefault(2 * 1024 * 1024)
     }
 
-    private fun copyTrack(
-        extractor: MediaExtractor,
+    private fun muxTracksInterleaved(
+        videoExtractor: MediaExtractor,
+        videoTrackIndex: Int,
+        audioExtractor: MediaExtractor,
+        audioTrackIndex: Int,
         muxer: MediaMuxer,
-        muxerTrack: Int,
-        buffer: ByteBuffer,
-        info: MediaCodec.BufferInfo,
+        initialBufferSize: Int,
     ) {
-        while (true) {
+        var buffer = ByteBuffer.allocate(initialBufferSize.coerceAtLeast(2 * 1024 * 1024))
+        val info = MediaCodec.BufferInfo()
+
+        var videoDone = false
+        var audioDone = false
+        var lastVideoPts = -1L
+        var lastAudioPts = -1L
+
+        while (!videoDone || !audioDone) {
+            val videoPts = if (!videoDone) videoExtractor.sampleTime else -1L
+            val audioPts = if (!audioDone) audioExtractor.sampleTime else -1L
+
+            if (videoPts < 0L && !videoDone) {
+                videoDone = true
+            }
+            if (audioPts < 0L && !audioDone) {
+                audioDone = true
+            }
+            if (videoDone && audioDone) break
+
+            val writeVideo = if (videoDone) {
+                false
+            } else if (audioDone) {
+                true
+            } else {
+                videoPts <= audioPts
+            }
+
+            val extractor = if (writeVideo) videoExtractor else audioExtractor
+            val trackIndex = if (writeVideo) videoTrackIndex else audioTrackIndex
+
+            val needed = runCatching { extractor.sampleSize.toInt() }.getOrDefault(-1)
+            if (needed > 0 && needed > buffer.capacity()) {
+                val newCap = maxOf(buffer.capacity() * 2, needed + 512 * 1024)
+                buffer = ByteBuffer.allocate(newCap)
+            }
+
             buffer.clear()
             val sampleSize = extractor.readSampleData(buffer, 0)
-            if (sampleSize < 0) break
+            if (sampleSize < 0) {
+                if (writeVideo) videoDone = true else audioDone = true
+                continue
+            }
+
+            val rawPts = extractor.sampleTime
+            val lastPts = if (writeVideo) lastVideoPts else lastAudioPts
+            // Android MediaMuxer requires non-negative and strictly monotonic PTS per track.
+            val pts = if (rawPts <= lastPts) {
+                lastPts + 1L
+            } else {
+                maxOf(rawPts, 0L)
+            }
+            if (writeVideo) {
+                lastVideoPts = pts
+            } else {
+                lastAudioPts = pts
+            }
+
             info.offset = 0
             info.size = sampleSize
-            info.presentationTimeUs = extractor.sampleTime.coerceAtLeast(0L)
+            info.presentationTimeUs = pts
             info.flags = extractor.sampleFlags
-            muxer.writeSampleData(muxerTrack, buffer, info)
+
+            buffer.position(0)
+            buffer.limit(sampleSize)
+
+            muxer.writeSampleData(trackIndex, buffer, info)
             extractor.advance()
         }
     }
