@@ -1,5 +1,7 @@
 package com.rjnsdev.linklift.app
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -8,6 +10,60 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
 import java.util.Locale
+
+internal fun shareDownloadedFile(
+    context: Context,
+    localUri: String?,
+    mimeType: String?,
+    title: String? = null,
+) {
+    if (localUri.isNullOrBlank()) {
+        Toast.makeText(context, "File path is unavailable to share.", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    runCatching {
+        val resolvedUri = resolvableDownloadedUri(context, localUri)
+        val resolvedMime = resolveDownloadedMimeType(context, resolvedUri, mimeType) ?: "*/*"
+
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = resolvedMime
+            putExtra(Intent.EXTRA_STREAM, resolvedUri)
+            clipData = ClipData.newRawUri("media", resolvedUri)
+            if (!title.isNullOrBlank()) {
+                putExtra(Intent.EXTRA_SUBJECT, title)
+            }
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val chooser = Intent.createChooser(shareIntent, "Share ${title ?: "media"}").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
+    }.onFailure { e ->
+        Toast.makeText(
+            context,
+            "Unable to share file: ${e.localizedMessage ?: "Unknown error"}",
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+}
+
+internal fun copyTextToClipboard(
+    context: Context,
+    text: String,
+    label: String = "Link",
+) {
+    if (text.isBlank()) return
+    runCatching {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        val clip = ClipData.newPlainText(label, text)
+        clipboard?.setPrimaryClip(clip)
+        Toast.makeText(context, "$label copied to clipboard", Toast.LENGTH_SHORT).show()
+    }.onFailure {
+        Toast.makeText(context, "Failed to copy $label", Toast.LENGTH_SHORT).show()
+    }
+}
 
 internal fun openDownloadedFile(context: Context, localUri: String, mimeType: String?) {
     val resolvedUri = resolvableDownloadedUri(context, localUri)

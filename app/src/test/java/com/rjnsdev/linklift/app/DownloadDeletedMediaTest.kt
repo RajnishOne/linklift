@@ -56,4 +56,29 @@ class DownloadDeletedMediaTest {
             if (tempFile.exists()) tempFile.delete()
         }
     }
+
+    @Test
+    fun testDownloadEntrySourceUrlAndSharingProperties() {
+        val entryWithUrl = DownloadEntry(
+            id = 201L,
+            title = "Shared Reel",
+            description = "Instagram Reel",
+            mimeType = "video/mp4",
+            kind = MediaKind.Video,
+            state = DownloadState.Completed,
+            progress = 1.0f,
+            downloadedBytes = 5000L,
+            totalBytes = 5000L,
+            localUri = "/storage/emulated/0/Download/LinkLift/reel.mp4",
+            sourceUrl = "https://www.instagram.com/reel/C2xyz123/",
+            updatedAt = System.currentTimeMillis(),
+        )
+
+        assertFalse(entryWithUrl.sourceUrl.isNullOrBlank())
+        assertFalse(entryWithUrl.localUri.isNullOrBlank())
+
+        val entryWithoutUrl = entryWithUrl.copy(sourceUrl = null)
+        assertTrue(entryWithoutUrl.sourceUrl.isNullOrBlank())
+    }
 }
+

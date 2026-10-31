@@ -31,10 +31,12 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -244,6 +246,21 @@ internal fun DownloadsScreen(
                             missingMediaDialogDownload = download
                         }
                     },
+                    onShare = { download ->
+                        if (isDownloadedMediaAvailable(context, download.localUri)) {
+                            shareDownloadedFile(
+                                context = context,
+                                localUri = download.localUri,
+                                mimeType = download.mimeType,
+                                title = download.title,
+                            )
+                        } else {
+                            missingMediaDialogDownload = download
+                        }
+                    },
+                    onCopyLink = { url ->
+                        copyTextToClipboard(context, url, "Link")
+                    },
                     onCancel = { onCancelDownload(item.id) },
                     onRetry = { onRetryDownload(item) },
                     onPromptYouTubeAuth = { onPromptYouTubeAuth(item) },
@@ -267,6 +284,8 @@ internal fun DownloadsScreen(
 private fun DownloadDetailCard(
     download: DownloadEntry,
     onOpen: (DownloadEntry) -> Unit,
+    onShare: (DownloadEntry) -> Unit = {},
+    onCopyLink: (String) -> Unit = {},
     onCancel: () -> Unit,
     onRetry: () -> Unit = {},
     onPromptYouTubeAuth: () -> Unit = {},
@@ -414,6 +433,66 @@ private fun DownloadDetailCard(
                                 text = "Dismiss",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = LinkLiftTextMuted,
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (download.state == DownloadState.Completed && !selectionMode) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    OutlinedButton(
+                        onClick = { onShare(download) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color.White,
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Share,
+                            contentDescription = "Share",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Share",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                    }
+
+                    if (!download.sourceUrl.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = { onCopyLink(download.sourceUrl) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color.White,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Link,
+                                contentDescription = "Copy link",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Copy link",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
                             )
                         }
                     }
@@ -570,6 +649,35 @@ private fun DownloadedFileViewer(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    IconButton(
+                        onClick = {
+                            shareDownloadedFile(
+                                context = context,
+                                localUri = rawLocalUri,
+                                mimeType = download.mimeType,
+                                title = download.title,
+                            )
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Share,
+                            contentDescription = "Share",
+                            tint = Color.White,
+                        )
+                    }
+                    if (!download.sourceUrl.isNullOrBlank()) {
+                        IconButton(
+                            onClick = {
+                                copyTextToClipboard(context, download.sourceUrl, "Link")
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Link,
+                                contentDescription = "Copy original link",
+                                tint = Color.White,
+                            )
+                        }
+                    }
                     TextButton(
                         onClick = { openDownloadedFile(context, localUri, download.mimeType) },
                     ) {
