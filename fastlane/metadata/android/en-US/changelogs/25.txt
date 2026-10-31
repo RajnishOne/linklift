@@ -1,0 +1,3 @@
+- Fixed HTTP 403 Forbidden errors on YouTube video downloads by upgrading yt-dlp and adopting the visionos client
+- Resolved 60-second stream cutoffs on Google Video CDN
+- Improved audio stream pairing to correctly select original language tracks over dubbed variants

@@ -48,8 +48,8 @@ android {
         applicationId = "com.rjnsdev.linklift.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 24
-        versionName = "2.14"
+        versionCode = 25
+        versionName = "2.15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -110,10 +110,7 @@ chaquopy {
         }
         pip {
             install("instaloader")
-            // Pin yt-dlp to 2025.10.14 — last version where android_vr client works
-            // without Proof-of-Origin tokens. 2026.8.17+ enforces POT for all clients
-            // causing "The page needs to be reloaded" for every unauthenticated request.
-            install("yt-dlp==2025.10.14")
+            install("yt-dlp")
         }
     }
 }
