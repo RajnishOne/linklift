@@ -188,6 +188,15 @@ internal fun LinkLiftRoot(
                             onSelectAll = viewModel::selectAllBatchEntries,
                             onClear = viewModel::clearBatchSelection,
                             onAudioOnlyToggled = viewModel::setBatchAudioOnly,
+                            onOpenQualityDialog = { viewModel.openBatchQualityDialog(forPendingDownload = false) },
+                            onSelectQualityPreset = { preset ->
+                                if (uiState.pendingBatchDownloadAfterQuality) {
+                                    viewModel.confirmBatchQualityAndDownload(preset)
+                                } else {
+                                    viewModel.setBatchQualityPreset(preset)
+                                }
+                            },
+                            onDismissQualityDialog = viewModel::dismissBatchQualityDialog,
                             onCancel = {
                                 if (uiState.batchProgress?.isActive == true) {
                                     viewModel.cancelBatchProcessing()

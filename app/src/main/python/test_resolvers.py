@@ -159,6 +159,33 @@ class TestGenericMediaResolver(unittest.TestCase):
         self.assertEqual(yt_pair_webm["format_id"], "251-drc")
         self.assertEqual(yt_pair_webm["ext"], "webm")
 
+    def test_entry_webpage_url_with_full_and_flat_id(self):
+        # Entry with full webpage_url
+        self.assertEqual(
+            _entry_webpage_url({"webpage_url": "https://www.youtube.com/watch?v=123"}),
+            "https://www.youtube.com/watch?v=123",
+        )
+        # Entry with full url
+        self.assertEqual(
+            _entry_webpage_url({"url": "https://www.youtube.com/watch?v=456"}),
+            "https://www.youtube.com/watch?v=456",
+        )
+        # Flat entry with bare ID in 'url' and 'id'
+        self.assertEqual(
+            _entry_webpage_url({"id": "dQw4w9WgXcQ", "url": "dQw4w9WgXcQ", "ie_key": "Youtube"}),
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        )
+        # Flat entry with bare ID in 'id' only
+        self.assertEqual(
+            _entry_webpage_url({"id": "abc789"}),
+            "https://www.youtube.com/watch?v=abc789",
+        )
+        # Entry with relative /watch URL
+        self.assertEqual(
+            _entry_webpage_url({"url": "/watch?v=rel123"}),
+            "https://www.youtube.com/watch?v=rel123",
+        )
+
     def test_entry_formats_pairing_and_deduplication(self):
         entry = {
             "formats": [

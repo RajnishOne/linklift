@@ -584,6 +584,7 @@ def resolve_url(url, cookie_file_path=None):
         cookie_file_path=primary_cookie_path,
         noplaylist=True,
         extract_flat=False,
+        playlistend=1,
     )
 
     info = None
@@ -601,6 +602,7 @@ def resolve_url(url, cookie_file_path=None):
             cookie_file_path=cookie_file_path,
             noplaylist=True,
             extract_flat=False,
+            playlistend=1,
         )
         try:
             with YoutubeDL(cookie_options) as ydl:
@@ -686,13 +688,28 @@ def _entry_webpage_url(entry):
         entry.get("url"),
     )
     for candidate in candidates:
-        if candidate and isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
+        if candidate and isinstance(candidate, str):
+            trimmed = candidate.strip()
+            if trimmed.startswith("http://") or trimmed.startswith("https://"):
+                return trimmed
+            if trimmed.startswith("/watch"):
+                return f"https://www.youtube.com{trimmed}"
+            if trimmed.startswith("watch?"):
+                return f"https://www.youtube.com/{trimmed}"
 
-    entry_id = entry.get("id")
-    extractor = (entry.get("ie_key") or entry.get("extractor_key") or "").lower()
-    if entry_id and ("youtube" in extractor or extractor == "youtubetab"):
-        return f"https://www.youtube.com/watch?v={entry_id}"
+    entry_id = entry.get("id") or entry.get("url")
+    if entry_id and isinstance(entry_id, str):
+        entry_id_trimmed = entry_id.strip()
+        if entry_id_trimmed.startswith("http://") or entry_id_trimmed.startswith("https://"):
+            return entry_id_trimmed
+        if entry_id_trimmed.startswith("/watch"):
+            return f"https://www.youtube.com{entry_id_trimmed}"
+        if entry_id_trimmed.startswith("watch?"):
+            return f"https://www.youtube.com/{entry_id_trimmed}"
+
+        extractor = (entry.get("ie_key") or entry.get("extractor_key") or "").lower()
+        if "youtube" in extractor or extractor == "youtubetab" or not extractor:
+            return f"https://www.youtube.com/watch?v={entry_id_trimmed}"
     return None
 
 

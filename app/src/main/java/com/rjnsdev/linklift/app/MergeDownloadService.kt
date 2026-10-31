@@ -3,6 +3,7 @@ package com.rjnsdev.linklift.app
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.ContentValues
 import android.content.Context
@@ -31,10 +32,13 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -157,6 +161,7 @@ class MergeDownloadService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = mutableMapOf<String, Job>()
     private val jobMutex = Mutex()
+    private val jobSemaphore = Semaphore(2)
     private val notificationManager by lazy {
         getSystemService(NOTIFICATION_SERVICE) as NotificationManager
     }
@@ -236,21 +241,23 @@ class MergeDownloadService : Service() {
             jobMutex.withLock {
                 if (activeJobs[jobId]?.isActive == true) return@withLock
                 val job = serviceScope.launch {
-                    runMergeJob(
-                        jobId = jobId,
-                        title = title,
-                        description = description,
-                        outputFileName = outputFileName,
-                        mimeType = mimeType,
-                        sourceUrl = sourceUrl,
-                        videoUrl = videoUrl,
-                        videoExt = videoExt,
-                        videoHeaders = videoHeaders,
-                        audioUrl = audioUrl,
-                        audioExt = audioExt,
-                        audioHeaders = audioHeaders,
-                        subfolder = subfolder,
-                    )
+                    jobSemaphore.withPermit {
+                        runMergeJob(
+                            jobId = jobId,
+                            title = title,
+                            description = description,
+                            outputFileName = outputFileName,
+                            mimeType = mimeType,
+                            sourceUrl = sourceUrl,
+                            videoUrl = videoUrl,
+                            videoExt = videoExt,
+                            videoHeaders = videoHeaders,
+                            audioUrl = audioUrl,
+                            audioExt = audioExt,
+                            audioHeaders = audioHeaders,
+                            subfolder = subfolder,
+                        )
+                    }
                     onJobFinished(jobId)
                 }
                 activeJobs[jobId] = job
@@ -387,7 +394,12 @@ class MergeDownloadService : Service() {
                     audioBytes = if (hasAudio) audioTemp.length().takeIf { len -> len > 0L } ?: it.audioBytes else 0L,
                 )
             }
-            showCompletionNotification(jobId, title)
+            val notifyEnabled = runCatching {
+                applicationContext.linkLiftDataStore.data.first()[PreferenceKeys.completionNotifications] ?: true
+            }.getOrDefault(true)
+            if (notifyEnabled) {
+                showCompletionNotification(jobId, title)
+            }
         } catch (cancellation: kotlinx.coroutines.CancellationException) {
             updateState(jobId) { record ->
                 if (record.state == MergeJobState.Completed) record
@@ -909,6 +921,7 @@ class MergeDownloadService : Service() {
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(record.title)
             .setContentText(if (activeCount > 1) "$stateText • $activeCount active downloads" else stateText)
+            .setContentIntent(createTapPendingIntent(downloadId = mergeJobToDownloadId(record.id), requestCode = SUMMARY_NOTIFICATION_ID))
             .setOngoing(record.state in ACTIVE_STATES)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -926,28 +939,51 @@ class MergeDownloadService : Service() {
         return builder.build()
     }
 
+    private fun createTapPendingIntent(downloadId: Long? = null, requestCode: Int): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            action = ACTION_VIEW_DOWNLOADS
+            putExtra(EXTRA_TARGET_SCREEN, AppScreen.Downloads.name)
+            if (downloadId != null) {
+                putExtra(EXTRA_DOWNLOAD_ID, downloadId)
+            }
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return PendingIntent.getActivity(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     private fun showCompletionNotification(jobId: String, title: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ensureNotificationChannel()
+        val notifId = completionNotificationIdFor(jobId)
+        val downloadId = mergeJobToDownloadId(jobId)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(title)
             .setContentText("Saved to Downloads/LinkLift")
+            .setContentIntent(createTapPendingIntent(downloadId = downloadId, requestCode = notifId))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        notificationManager.notify(completionNotificationIdFor(jobId), notification)
+        notificationManager.notify(notifId, notification)
     }
 
     private fun showFailureNotification(jobId: String, title: String, error: String?) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ensureNotificationChannel()
+        val notifId = completionNotificationIdFor(jobId)
+        val downloadId = mergeJobToDownloadId(jobId)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
             .setContentTitle("Couldn't finish download")
             .setContentText(error?.take(120) ?: title)
+            .setContentIntent(createTapPendingIntent(downloadId = downloadId, requestCode = notifId))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
-        notificationManager.notify(completionNotificationIdFor(jobId), notification)
+        notificationManager.notify(notifId, notification)
     }
 
     private fun completionNotificationIdFor(jobId: String): Int {

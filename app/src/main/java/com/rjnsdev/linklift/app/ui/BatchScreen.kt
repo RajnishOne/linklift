@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.PlayCircleOutline
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -45,6 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.rjnsdev.linklift.app.QualityPreset
+import com.rjnsdev.linklift.app.ui.BatchQualityDialog
 import com.rjnsdev.linklift.app.ui.FolderSelectionDialog
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccent
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftAccentBright
@@ -63,6 +66,9 @@ internal fun BatchScreen(
     onSelectTargetSubfolder: (String) -> Unit,
     onCreateSubfolder: (String) -> Unit,
     onAudioOnlyToggled: (Boolean) -> Unit = {},
+    onOpenQualityDialog: () -> Unit = {},
+    onSelectQualityPreset: (QualityPreset) -> Unit = {},
+    onDismissQualityDialog: () -> Unit = {},
 ) {
     val batch = uiState.batch ?: return
     val selected = uiState.selectedBatchIndices
@@ -79,6 +85,18 @@ internal fun BatchScreen(
             onSelectSubfolder = onSelectTargetSubfolder,
             onCreateSubfolder = onCreateSubfolder,
             onDismissRequest = { showFolderDialog = false },
+        )
+    }
+
+    if (uiState.showBatchQualityDialog) {
+        val currentPreset = uiState.batchQualityPreset
+            ?: uiState.settings.preferredQuality.takeIf { it != QualityPreset.AskEveryTime }
+            ?: QualityPreset.BestQuality
+
+        BatchQualityDialog(
+            selectedPreset = currentPreset,
+            onSelectPreset = onSelectQualityPreset,
+            onDismissRequest = onDismissQualityDialog,
         )
     }
 
@@ -204,9 +222,23 @@ internal fun BatchScreen(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         val isAudio = uiState.batchAudioOnly
+                        val videoSubtitle = when {
+                            uiState.batchQualityPreset != null -> uiState.batchQualityPreset.label
+                            uiState.settings.preferredQuality == QualityPreset.AskEveryTime -> "Ask every time (tap to set)"
+                            else -> uiState.settings.preferredQuality.label
+                        }
+
                         // Video option
                         Surface(
-                            onClick = { if (!isProcessing) onAudioOnlyToggled(false) },
+                            onClick = {
+                                if (!isProcessing) {
+                                    if (isAudio) {
+                                        onAudioOnlyToggled(false)
+                                    } else {
+                                        onOpenQualityDialog()
+                                    }
+                                }
+                            },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(14.dp),
                             color = if (!isAudio) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
@@ -234,11 +266,19 @@ internal fun BatchScreen(
                                         color = if (!isAudio) Color.White else LinkLiftTextSecondary,
                                     )
                                     Text(
-                                        text = uiState.settings.preferredQuality.label,
+                                        text = videoSubtitle,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = LinkLiftTextSecondary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                if (!isAudio) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Tune,
+                                        contentDescription = "Change quality",
+                                        tint = Color.White.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(18.dp),
                                     )
                                 }
                             }

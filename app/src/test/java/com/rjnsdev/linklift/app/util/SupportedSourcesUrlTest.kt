@@ -5,14 +5,17 @@ import com.rjnsdev.linklift.app.MediaKind
 import com.rjnsdev.linklift.app.buildGoogleVideoChunkUrl
 import com.rjnsdev.linklift.app.extractAllUrls
 import com.rjnsdev.linklift.app.extractFirstUrl
+import com.rjnsdev.linklift.app.isExplicitPlaylistUrl
 import com.rjnsdev.linklift.app.isInstagramUrl
 import com.rjnsdev.linklift.app.isSupportedMediaUrl
 import com.rjnsdev.linklift.app.isYouTubeAuthRequired
 import com.rjnsdev.linklift.app.isYouTubeUrl
 import com.rjnsdev.linklift.app.isYtDlpSupportedHost
 import com.rjnsdev.linklift.app.looksLikePlaylistUrl
+import com.rjnsdev.linklift.app.normalizeBatchEntryUrl
 import com.rjnsdev.linklift.app.shouldDownloadWithMergeService
 import com.rjnsdev.linklift.app.shouldRefreshUrlBeforeDownload
+import com.rjnsdev.linklift.app.stripPlaylistQuery
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -70,6 +73,50 @@ class SupportedSourcesUrlTest {
         for (url in singleVideoUrls) {
             assertFalse("Expected looksLikePlaylistUrl=false for $url", looksLikePlaylistUrl(url))
         }
+    }
+
+    @Test
+    fun testExplicitPlaylistUrlDetection() {
+        assertTrue(isExplicitPlaylistUrl("https://www.youtube.com/playlist?list=PL1234567890"))
+        assertTrue(isExplicitPlaylistUrl("https://youtube.com/playlist?list=PL1234567890"))
+        assertTrue(isExplicitPlaylistUrl("https://music.youtube.com/playlist?list=PL1234567890"))
+        assertFalse(isExplicitPlaylistUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL1234567890"))
+        assertFalse(isExplicitPlaylistUrl("https://youtu.be/dQw4w9WgXcQ?list=PL1234567890"))
+        assertFalse(isExplicitPlaylistUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
+    }
+
+    @Test
+    fun testStripPlaylistQuery() {
+        val withList = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL1234567890&index=2"
+        val stripped = stripPlaylistQuery(withList)
+        assertTrue(stripped.contains("v=dQw4w9WgXcQ"))
+        assertFalse(stripped.contains("list="))
+        assertFalse(stripped.contains("index="))
+
+        val shortWithList = "https://youtu.be/dQw4w9WgXcQ?list=PL1234567890"
+        val shortStripped = stripPlaylistQuery(shortWithList)
+        assertTrue(shortStripped.contains("dQw4w9WgXcQ"))
+        assertFalse(shortStripped.contains("list="))
+    }
+
+    @Test
+    fun testNormalizeBatchEntryUrl() {
+        assertEquals(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            normalizeBatchEntryUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        )
+        assertEquals(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            normalizeBatchEntryUrl("/watch?v=dQw4w9WgXcQ")
+        )
+        assertEquals(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            normalizeBatchEntryUrl("watch?v=dQw4w9WgXcQ")
+        )
+        assertEquals(
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            normalizeBatchEntryUrl("dQw4w9WgXcQ")
+        )
     }
 
     // =========================================================================

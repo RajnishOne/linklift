@@ -57,12 +57,14 @@ class MainActivity : ComponentActivity() {
             )
         }
         handleIncomingShareIntent(intent)
+        handleIncomingNotificationIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIncomingShareIntent(intent)
+        handleIncomingNotificationIntent(intent)
     }
 
     private fun handleIncomingShareIntent(intent: Intent?) {
@@ -74,6 +76,21 @@ class MainActivity : ComponentActivity() {
 
         val handled = viewModel.handleSharedText(sharedText, isFromShare = true)
         if (handled) {
+            setIntent(Intent())
+        }
+    }
+
+    private fun handleIncomingNotificationIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        val targetScreen = intent.getStringExtra(EXTRA_TARGET_SCREEN)
+        if (action == ACTION_VIEW_DOWNLOADS || targetScreen == AppScreen.Downloads.name) {
+            val downloadId = if (intent.hasExtra(EXTRA_DOWNLOAD_ID)) {
+                intent.getLongExtra(EXTRA_DOWNLOAD_ID, -1L).takeIf { it != -1L }
+            } else {
+                null
+            }
+            viewModel.handleNotificationNavigation(downloadId)
             setIntent(Intent())
         }
     }

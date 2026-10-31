@@ -35,6 +35,10 @@
 
                 <data android:mimeType="text/plain" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="com.rjnsdev.linklift.action.VIEW_DOWNLOADS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -57,6 +61,14 @@
             android:name=".MergeDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <receiver
+            android:name=".DownloadNotificationReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_NOTIFICATION_CLICKED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

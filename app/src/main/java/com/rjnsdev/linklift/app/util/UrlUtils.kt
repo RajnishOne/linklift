@@ -102,11 +102,36 @@ internal fun looksLikePlaylistUrl(rawUrl: String): Boolean {
                 path.startsWith("/c/") ||
                 path.startsWith("/user/") ||
                 path.startsWith("/@") ||
-                (!listParam.isNullOrBlank() && (path.startsWith("/playlist") || path.startsWith("/watch") && listParam.startsWith("PL")))
+                (!listParam.isNullOrBlank() && (path.startsWith("/playlist") || path.startsWith("/watch")))
         }
         host == "youtu.be" -> !listParam.isNullOrBlank()
         else -> false
     }
+}
+
+internal fun isExplicitPlaylistUrl(rawUrl: String): Boolean {
+    val host = getUriHost(rawUrl).lowercase(Locale.ROOT).removePrefix("www.")
+    val path = getUriPath(rawUrl).lowercase(Locale.ROOT)
+    return (host.endsWith("youtube.com") || host == "youtu.be") && path.startsWith("/playlist")
+}
+
+internal fun stripPlaylistQuery(rawUrl: String): String {
+    return rawUrl
+        .replace(Regex("""([?&])list=[^&]*&?""")) { mr -> if (mr.value.startsWith("?")) "?" else "&" }
+        .replace(Regex("""([?&])index=[^&]*&?""")) { mr -> if (mr.value.startsWith("?")) "?" else "&" }
+        .trimEnd('?', '&')
+}
+
+internal fun normalizeBatchEntryUrl(rawUrl: String): String {
+    val trimmed = rawUrl.trim()
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        return trimmed
+    }
+    if (trimmed.startsWith("/watch") || trimmed.startsWith("watch?")) {
+        val rel = trimmed.removePrefix("/")
+        return "https://www.youtube.com/$rel"
+    }
+    return "https://www.youtube.com/watch?v=$trimmed"
 }
 
 internal fun shouldRefreshUrlBeforeDownload(url: String): Boolean {

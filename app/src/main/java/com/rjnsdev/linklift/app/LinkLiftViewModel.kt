@@ -224,6 +224,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun handleNotificationNavigation(downloadId: Long? = null) {
+        openScreen(AppScreen.Downloads)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { refreshDownloads() }
+        }
+    }
+
     fun openScreen(screen: AppScreen) {
         val current = _uiState.value.currentScreen
         if (current == screen) return
@@ -262,6 +269,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 batch = null,
                 selectedBatchIndices = emptySet(),
                 batchProgress = null,
+                batchQualityPreset = null,
+                showBatchQualityDialog = false,
+                pendingBatchDownloadAfterQuality = false,
                 isFromShare = false,
             )
         }
@@ -440,7 +450,19 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 ensureActive()
                 val latency = SystemClock.elapsedRealtime() - startedAt
                 if (batch == null) {
-                    analyzeLink(rawUrl = rawUrl)
+                    if (isExplicitPlaylistUrl(rawUrl)) {
+                        val targetScreen = if (screenBackStack.isNotEmpty()) screenBackStack.removeLast() else AppScreen.Home
+                        _uiState.update {
+                            it.copy(
+                                currentScreen = targetScreen,
+                                analysisLatencyMs = null,
+                                message = "Unable to read that playlist. Please check the link and try again.",
+                            )
+                        }
+                        return@launch
+                    }
+                    val singleUrl = stripPlaylistQuery(rawUrl)
+                    analyzeLink(rawUrl = singleUrl)
                     return@launch
                 }
                 val suggestedSubfolder = MergeDownloadService.sanitizeSubfolder(batch.title.ifBlank { batch.uploader })
@@ -451,6 +473,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         batch = batch,
                         selectedBatchIndices = defaultBatchSelection(batch),
                         batchProgress = null,
+                        batchQualityPreset = null,
+                        showBatchQualityDialog = false,
+                        pendingBatchDownloadAfterQuality = false,
                         preview = null,
                         analysisLatencyMs = latency,
                         targetSubfolder = suggestedSubfolder,
@@ -909,6 +934,45 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(batchAudioOnly = enabled) }
     }
 
+    fun setBatchQualityPreset(preset: QualityPreset) {
+        _uiState.update {
+            it.copy(
+                batchQualityPreset = preset,
+                showBatchQualityDialog = false,
+                pendingBatchDownloadAfterQuality = false,
+            )
+        }
+    }
+
+    fun openBatchQualityDialog(forPendingDownload: Boolean = false) {
+        _uiState.update {
+            it.copy(
+                showBatchQualityDialog = true,
+                pendingBatchDownloadAfterQuality = forPendingDownload,
+            )
+        }
+    }
+
+    fun dismissBatchQualityDialog() {
+        _uiState.update {
+            it.copy(
+                showBatchQualityDialog = false,
+                pendingBatchDownloadAfterQuality = false,
+            )
+        }
+    }
+
+    fun confirmBatchQualityAndDownload(preset: QualityPreset) {
+        _uiState.update {
+            it.copy(
+                batchQualityPreset = preset,
+                showBatchQualityDialog = false,
+                pendingBatchDownloadAfterQuality = false,
+            )
+        }
+        downloadSelectedBatchEntries()
+    }
+
     fun cancelBatch() {
         // Tearing down the batch screen also stops any in-flight processing.
         batchProcessingJob?.cancel()
@@ -919,6 +983,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 batch = null,
                 selectedBatchIndices = emptySet(),
                 batchProgress = null,
+                batchQualityPreset = null,
+                showBatchQualityDialog = false,
+                pendingBatchDownloadAfterQuality = false,
                 isFromShare = false,
             )
         }
@@ -946,6 +1013,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 batch = null,
                 selectedBatchIndices = emptySet(),
                 batchProgress = null,
+                batchQualityPreset = null,
+                showBatchQualityDialog = false,
+                pendingBatchDownloadAfterQuality = false,
                 isFromShare = false,
                 message = if (total > 0) {
                     "Batch cancelled after $processed of $total. Already-queued downloads continue."
@@ -979,6 +1049,19 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         if (selectedEntries.isEmpty()) {
             _uiState.update { it.copy(message = "Select at least one item to download.") }
             return
+        }
+
+        if (!state.batchAudioOnly) {
+            val effectivePreset = state.batchQualityPreset ?: state.settings.preferredQuality
+            if (effectivePreset == QualityPreset.AskEveryTime) {
+                _uiState.update {
+                    it.copy(
+                        showBatchQualityDialog = true,
+                        pendingBatchDownloadAfterQuality = true,
+                    )
+                }
+                return
+            }
         }
 
         val batchFolder = state.targetSubfolder.takeIf { it.isNotBlank() } ?: state.settings.downloadSubfolder
@@ -1028,7 +1111,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
 
                 val enqueueOk = previewResult?.let { preview ->
                     val primary = preview.items.firstOrNull() ?: return@let null
-                    val preset = uiState.value.settings.preferredQuality
+                    val preset = if (uiState.value.batchAudioOnly) {
+                        uiState.value.settings.preferredQuality
+                    } else {
+                        uiState.value.batchQualityPreset
+                            ?: uiState.value.settings.preferredQuality.takeIf { it != QualityPreset.AskEveryTime }
+                            ?: QualityPreset.BestQuality
+                    }
                     val videoPref = uiState.value.settings.preferredVideoFormat
                     val audioPref = uiState.value.settings.preferredAudioFormat
                     val preferAudioOnly = uiState.value.batchAudioOnly
@@ -1100,6 +1189,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     batchProgress = null,
                     batch = null,
                     selectedBatchIndices = emptySet(),
+                    batchQualityPreset = null,
+                    showBatchQualityDialog = false,
+                    pendingBatchDownloadAfterQuality = false,
                     targetSubfolder = it.settings.downloadSubfolder,
                     isFromShare = false,
                     message = batchMsg,
@@ -1130,7 +1222,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val entries = buildList {
             for (i in 0 until rawEntries.length()) {
                 val obj = rawEntries.optJSONObject(i) ?: continue
-                val entryUrl = obj.optString("source_url").takeIf { it.isNotBlank() } ?: continue
+                val rawEntryUrl = obj.optString("source_url").takeIf { it.isNotBlank() } ?: continue
+                val entryUrl = normalizeBatchEntryUrl(rawEntryUrl)
                 val title = obj.optString("title").takeIf { it.isNotBlank() } ?: shortenUrlForDisplay(entryUrl)
                 val durationMs = obj.opt("duration_ms").let { value ->
                     when (value) {
