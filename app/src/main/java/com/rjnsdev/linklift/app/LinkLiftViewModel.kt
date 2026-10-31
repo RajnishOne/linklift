@@ -1656,7 +1656,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
 
         _uiState.update { it.copy(inputUrl = sourceUrl) }
-        analyzeLink(rawUrl = sourceUrl)
+        analyzeInput(rawInput = sourceUrl)
     }
 
     private fun observePreferences() {

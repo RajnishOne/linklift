@@ -43,21 +43,26 @@ internal fun isDownloadedMediaAvailable(context: Context, localUri: String?): Bo
     return when (uri.scheme?.lowercase(Locale.ROOT)) {
         "file" -> {
             val path = uri.path
-            if (path != null && runCatching { File(path).exists() }.getOrDefault(false)) {
+            if (path != null && runCatching {
+                val f = File(path)
+                f.exists() && f.length() > 0L
+            }.getOrDefault(false)) {
                 true
             } else {
                 runCatching {
                     val resolved = resolvableDownloadedUri(context, trimmed)
-                    context.contentResolver.openFileDescriptor(resolved, "r")?.use { true }
-                        ?: context.contentResolver.openInputStream(resolved)?.use { true }
-                        ?: false
+                    context.contentResolver.openFileDescriptor(resolved, "r")?.use { pfd ->
+                        pfd.statSize != 0L
+                    } ?: context.contentResolver.openInputStream(resolved)?.use { true }
+                    ?: false
                 }.getOrDefault(false)
             }
         }
         "content" -> runCatching {
-            context.contentResolver.openFileDescriptor(uri, "r")?.use { true }
-                ?: context.contentResolver.openInputStream(uri)?.use { true }
-                ?: false
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                pfd.statSize != 0L
+            } ?: context.contentResolver.openInputStream(uri)?.use { true }
+            ?: false
         }.getOrDefault(false)
         else -> false
     }

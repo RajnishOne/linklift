@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.PlayCircleOutline
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -76,6 +78,7 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftBackground
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftCard
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftError
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftSuccess
+import com.rjnsdev.linklift.app.ui.theme.LinkLiftSurface
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextMuted
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftTextSecondary
 import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
@@ -94,6 +97,7 @@ internal fun DownloadsScreen(
     val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     var viewerDownload by remember { mutableStateOf<DownloadEntry?>(null) }
+    var missingMediaDialogDownload by remember { mutableStateOf<DownloadEntry?>(null) }
     var selectionMode by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
     val filtered = remember(downloads, query) {
@@ -115,6 +119,17 @@ internal fun DownloadsScreen(
         DownloadedFileViewer(
             download = download,
             onDismiss = { viewerDownload = null },
+        )
+    }
+
+    missingMediaDialogDownload?.let { download: DownloadEntry ->
+        DownloadedMediaDeletedDialog(
+            download = download,
+            onDismiss = { missingMediaDialogDownload = null },
+            onReanalyze = {
+                missingMediaDialogDownload = null
+                onRegenerateTracked(download.sourceUrl)
+            },
         )
     }
 
@@ -225,19 +240,8 @@ internal fun DownloadsScreen(
                     onOpen = { download ->
                         if (isDownloadedMediaAvailable(context, download.localUri)) {
                             viewerDownload = download
-                        } else if (!download.sourceUrl.isNullOrBlank()) {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Downloaded file not found on device. Re-analyzing link...",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                            onRegenerateTracked(download.sourceUrl)
                         } else {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Downloaded file is no longer available on this device.",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
+                            missingMediaDialogDownload = download
                         }
                     },
                     onCancel = { onCancelDownload(item.id) },
@@ -271,8 +275,7 @@ private fun DownloadDetailCard(
     selected: Boolean = false,
     onSelectionChanged: (Boolean) -> Unit = {},
 ) {
-    val canOpen = download.state == DownloadState.Completed &&
-        (!download.localUri.isNullOrBlank() || !download.sourceUrl.isNullOrBlank())
+    val canOpen = download.state == DownloadState.Completed
     val isActive = download.state == DownloadState.Queued ||
         download.state == DownloadState.Downloading ||
         download.state == DownloadState.Paused
@@ -697,3 +700,97 @@ private fun DownloadThumbnail(
         }
     }
 }
+
+@Composable
+private fun DownloadedMediaDeletedDialog(
+    download: DownloadEntry,
+    onDismiss: () -> Unit,
+    onReanalyze: () -> Unit,
+) {
+    val hasSourceUrl = !download.sourceUrl.isNullOrBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(24.dp),
+        containerColor = LinkLiftSurface,
+        icon = {
+            Surface(
+                shape = CircleShape,
+                color = LinkLiftError.copy(alpha = 0.16f),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ErrorOutline,
+                    contentDescription = null,
+                    tint = LinkLiftError,
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .size(28.dp),
+                )
+            }
+        },
+        title = {
+            Text(
+                text = "File Deleted",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "\"${download.title}\" is no longer available on your device storage. It may have been deleted or moved.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LinkLiftTextSecondary,
+                )
+                if (hasSourceUrl) {
+                    Text(
+                        text = "Would you like to re-analyze the link to download it again?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LinkLiftTextMuted,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (hasSourceUrl) {
+                Button(
+                    onClick = onReanalyze,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF0F0F0F),
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .padding(end = 4.dp),
+                    )
+                    Text("Re-analyze", fontWeight = FontWeight.SemiBold)
+                }
+            } else {
+                Button(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF0F0F0F),
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("OK", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        },
+        dismissButton = if (hasSourceUrl) {
+            {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", color = LinkLiftTextMuted)
+                }
+            }
+        } else null,
+    )
+}
+
