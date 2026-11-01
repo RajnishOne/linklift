@@ -47,5 +47,6 @@ internal fun MergeJobRecord.toDownloadEntry(): DownloadEntry {
         sourceUrl = sourceUrl,
         updatedAt = updatedAt,
         dmFailureCode = null,
+        subfolder = subfolder?.takeIf { it.isNotBlank() },
     )
 }

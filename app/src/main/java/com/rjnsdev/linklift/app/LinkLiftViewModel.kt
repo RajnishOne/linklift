@@ -152,6 +152,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     totalBytes = next.totalBytes,
                     localUri = next.localUri,
                     updatedAt = next.updatedAt,
+                    subfolder = next.subfolder ?: prev.subfolder,
                 )
             } else {
                 next
@@ -166,7 +167,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             kind == other.kind &&
             mimeType == other.mimeType &&
             localUri == other.localUri &&
-            sourceUrl == other.sourceUrl
+            sourceUrl == other.sourceUrl &&
+            subfolder == other.subfolder
 
     fun onUrlChanged(value: String) {
         _uiState.update { it.copy(inputUrl = value) }
@@ -1386,7 +1388,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
 
             val downloadId = manager.enqueue(request)
-            rememberTrackedDownload(downloadId = downloadId, sourceUrl = sourceUrl)
+            rememberTrackedDownload(
+                downloadId = downloadId,
+                sourceUrl = sourceUrl,
+                subfolder = cleanSubfolder,
+            )
         }
         refreshDownloads()
     }
@@ -1506,6 +1512,10 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val sourceUrls = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSourceUrls])
                 sourceUrls.remove(downloadId)
                 prefs[PreferenceKeys.downloadSourceUrls] = serializeDownloadSourceMap(sourceUrls)
+
+                val subfolders = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSubfolders])
+                subfolders.remove(downloadId)
+                prefs[PreferenceKeys.downloadSubfolders] = serializeDownloadSourceMap(subfolders)
             }
         }
     }
@@ -1539,6 +1549,17 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch(Dispatchers.IO) {
+            val resolvedSubfolder = download.subfolder?.takeIf { it.isNotBlank() }
+                ?: (if (isMergeJobDownloadId(download.id)) {
+                    MergeJobStore.snapshot().values.firstOrNull { mergeJobToDownloadId(it.id) == download.id }?.subfolder
+                } else null)?.takeIf { it.isNotBlank() }
+                ?: MergeJobStore.snapshot().values.firstOrNull { it.sourceUrl == sourceUrl }?.subfolder?.takeIf { it.isNotBlank() }
+                ?: readTrackedSubfolders()[download.id]?.takeIf { it.isNotBlank() }
+                ?: extractSubfolderFromUriString(download.localUri)
+                ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() }
+                ?: uiState.value.settings.downloadSubfolder
+            val downloadLoc = defaultDownloadLocation(resolvedSubfolder)
+
             try {
                 val previewResult = runCatching {
                     if (isInstagramHost(sourceUrl)) {
@@ -1553,7 +1574,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     if (isYouTubeAuthRequired(isYt, hasCookies, errorMsg) || (isYt && !hasCookies)) {
                         promptYouTubeAuth(
                             reason = "YouTube requires authentication to download this video: $errorMsg",
-                            retryDownload = download,
+                            retryDownload = download.copy(subfolder = resolvedSubfolder),
                         )
                     }
                     throw error
@@ -1580,10 +1601,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     preferAudioOnly = preferAudioOnly,
                 ) ?: primary.formats.firstOrNull()
 
-                val currentTarget = uiState.value.targetSubfolder.takeIf { it.isNotBlank() }
-                    ?: uiState.value.settings.downloadSubfolder
-                val downloadLoc = defaultDownloadLocation(currentTarget)
-
                 // Remove the old failed download entry once resolved successfully
                 removeDownloadEntrySilently(download.id)
 
@@ -1597,7 +1614,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         sourceUrl = sourceUrl,
                         item = primary,
                         format = chosen,
-                        subfolder = currentTarget,
+                        subfolder = resolvedSubfolder,
                     )
                     _uiState.update {
                         it.copy(
@@ -1616,7 +1633,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         sourceUrl = sourceUrl,
                         items = listOf(resolved),
                         formats = listOf(chosen),
-                        subfolder = currentTarget,
+                        subfolder = resolvedSubfolder,
                     )
                     _uiState.update {
                         it.copy(
@@ -1652,6 +1669,10 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     val sourceUrls = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSourceUrls])
                     systemSet.forEach(sourceUrls::remove)
                     prefs[PreferenceKeys.downloadSourceUrls] = serializeDownloadSourceMap(sourceUrls)
+
+                    val subfolders = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSubfolders])
+                    systemSet.forEach(subfolders::remove)
+                    prefs[PreferenceKeys.downloadSubfolders] = serializeDownloadSourceMap(subfolders)
                 }
             }
             if (mergeIds.isNotEmpty()) {
@@ -3015,7 +3036,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private suspend fun rememberTrackedDownload(downloadId: Long, sourceUrl: String) {
+    private suspend fun rememberTrackedDownload(
+        downloadId: Long,
+        sourceUrl: String,
+        subfolder: String? = null,
+    ) {
         appContext.linkLiftDataStore.edit { prefs ->
             val currentIds = prefs[PreferenceKeys.downloadIds]?.toMutableSet() ?: mutableSetOf()
             currentIds += downloadId.toString()
@@ -3024,6 +3049,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             val sourceUrls = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSourceUrls])
             sourceUrls[downloadId] = sourceUrl
             prefs[PreferenceKeys.downloadSourceUrls] = serializeDownloadSourceMap(sourceUrls)
+
+            val cleanSub = subfolder?.let { MergeDownloadService.sanitizeSubfolder(it) }?.takeIf { it.isNotBlank() }
+            if (cleanSub != null) {
+                val subfolders = parseDownloadSourceMap(prefs[PreferenceKeys.downloadSubfolders])
+                subfolders[downloadId] = cleanSub
+                prefs[PreferenceKeys.downloadSubfolders] = serializeDownloadSourceMap(subfolders)
+            }
         }
     }
 
@@ -3043,6 +3075,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
         val ids = readTrackedIds()
         val sourceUrls = readTrackedSourceUrls()
+        val subfolders = readTrackedSubfolders()
         val systemDownloads = if (ids.isEmpty()) {
             emptyList()
         } else {
@@ -3052,7 +3085,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 cursor.use {
                     while (it.moveToNext()) {
                         val downloadId = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
-                        add(it.toDownloadEntry(sourceUrl = sourceUrls[downloadId], manager = manager))
+                        add(
+                            it.toDownloadEntry(
+                                sourceUrl = sourceUrls[downloadId],
+                                subfolder = subfolders[downloadId],
+                                manager = manager,
+                            )
+                        )
                     }
                 }
             }
@@ -3082,6 +3121,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         return appContext.linkLiftDataStore.data
             .catch { emit(emptyPreferences()) }
             .map { prefs -> parseDownloadSourceMap(prefs[PreferenceKeys.downloadSourceUrls]) }
+            .first()
+    }
+
+    private suspend fun readTrackedSubfolders(): Map<Long, String> {
+        return appContext.linkLiftDataStore.data
+            .catch { emit(emptyPreferences()) }
+            .map { prefs -> parseDownloadSourceMap(prefs[PreferenceKeys.downloadSubfolders]) }
             .first()
     }
 
@@ -3116,6 +3162,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
 
     private fun Cursor.toDownloadEntry(
         sourceUrl: String?,
+        subfolder: String? = null,
         manager: DownloadManager? = null,
     ): DownloadEntry {
         val id = getLong(getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
@@ -3147,10 +3194,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             rawLocalUri
         }
 
+        val effectiveSubfolder = subfolder?.takeIf { it.isNotBlank() }
+            ?: extractSubfolderFromUriString(localUri)
+
         return DownloadEntry(
             id = id,
             title = title.ifBlank { "Download $id" },
-            description = if (description.isBlank()) downloadStatusDescription(status, reason) else description,
+            description = if (description.isBlank()) downloadStatusDescription(status, reason, effectiveSubfolder) else description,
             mimeType = mimeType,
             kind = MediaKind.fromMimeType(mimeType, localUri.orEmpty()),
             state = state,
@@ -3165,15 +3215,16 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             sourceUrl = sourceUrl,
             updatedAt = updatedAt,
             dmFailureCode = if (state == DownloadState.Failed) reason else null,
+            subfolder = effectiveSubfolder,
         )
     }
 
-    private fun downloadStatusDescription(status: Int, reason: Int): String {
+    private fun downloadStatusDescription(status: Int, reason: Int, subfolder: String? = null): String {
         return when (status) {
             DownloadManager.STATUS_PENDING -> "Waiting for network availability"
             DownloadManager.STATUS_RUNNING -> "Downloading now"
             DownloadManager.STATUS_PAUSED -> "Paused by system or network policy"
-            DownloadManager.STATUS_SUCCESSFUL -> "Saved to ${defaultDownloadLocation()}"
+            DownloadManager.STATUS_SUCCESSFUL -> "Saved to ${defaultDownloadLocation(subfolder)}"
             else -> "Download failed (reason $reason)"
         }
     }

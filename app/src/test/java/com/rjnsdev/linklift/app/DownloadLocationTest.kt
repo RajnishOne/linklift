@@ -49,9 +49,39 @@ class DownloadLocationTest {
         )
         val rootEntry = rootRecord.toDownloadEntry()
         assertEquals("1080p • Saved to Downloads/LinkLift", rootEntry.description)
+        assertEquals(null, rootEntry.subfolder)
 
         val subfolderRecord = rootRecord.copy(subfolder = "History")
         val subfolderEntry = subfolderRecord.toDownloadEntry()
         assertEquals("1080p • Saved to Downloads/LinkLift/History", subfolderEntry.description)
+        assertEquals("History", subfolderEntry.subfolder)
+    }
+
+    @Test
+    fun extractSubfolderFromUriString_correctlyParsesSubfolders() {
+        assertEquals(
+            "Bollywood Hits",
+            extractSubfolderFromUriString("file:///storage/emulated/0/Download/LinkLift/Bollywood%20Hits/song.mp3")
+        )
+        assertEquals(
+            "Bollywood Hits",
+            extractSubfolderFromUriString("/storage/emulated/0/Download/LinkLift/Bollywood Hits/song.mp3")
+        )
+        assertEquals(
+            "Playlists/Rock",
+            extractSubfolderFromUriString("file:///storage/emulated/0/Download/LinkLift/Playlists/Rock/song.mp3")
+        )
+        assertEquals(
+            null,
+            extractSubfolderFromUriString("file:///storage/emulated/0/Download/LinkLift/song.mp3")
+        )
+        assertEquals(
+            null,
+            extractSubfolderFromUriString("content://media/external/downloads/1234")
+        )
+        assertEquals(
+            null,
+            extractSubfolderFromUriString(null)
+        )
     }
 }

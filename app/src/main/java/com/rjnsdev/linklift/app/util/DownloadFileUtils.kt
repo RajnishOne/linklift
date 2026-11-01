@@ -157,3 +157,27 @@ internal fun resolveDownloadedMimeType(
         .lowercase(Locale.ROOT)
     return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
 }
+
+internal fun extractSubfolderFromUriString(uriString: String?): String? {
+    if (uriString.isNullOrBlank()) return null
+    return runCatching {
+        val trimmed = uriString.trim()
+        val rawPath = runCatching { java.net.URI(trimmed).path }.getOrNull()
+            ?: runCatching { Uri.parse(trimmed).path }.getOrNull()
+            ?: trimmed
+        val decoded = runCatching { java.net.URLDecoder.decode(rawPath, "UTF-8") }.getOrDefault(rawPath)
+        val marker = "LinkLift/"
+        val index = decoded.indexOf(marker)
+        if (index != -1) {
+            val afterMarker = decoded.substring(index + marker.length).trimStart('/')
+            if (afterMarker.contains('/')) {
+                val subfolder = afterMarker.substringBeforeLast('/')
+                MergeDownloadService.sanitizeSubfolder(subfolder).takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+    }.getOrNull()
+}

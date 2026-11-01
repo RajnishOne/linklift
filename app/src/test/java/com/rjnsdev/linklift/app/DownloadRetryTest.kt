@@ -74,4 +74,37 @@ class DownloadRetryTest {
 
         assertFalse("Generic timeout should not require YouTube auth", isYouTubeOrAuth)
     }
+
+    @Test
+    fun testFailedDownloadPreservesPlaylistSubfolderForRetry() {
+        val playlistSubfolder = "Bollywood Classics"
+        val failedEntry = DownloadEntry(
+            id = 100L,
+            title = "Classic Track",
+            description = "Download failed (network error)",
+            mimeType = "audio/mpeg",
+            kind = MediaKind.Audio,
+            state = DownloadState.Failed,
+            progress = 0f,
+            downloadedBytes = 0L,
+            totalBytes = 5000L,
+            localUri = "file:///storage/emulated/0/Download/LinkLift/Bollywood%20Classics/track.mp3",
+            sourceUrl = "https://www.youtube.com/watch?v=sampleId",
+            updatedAt = System.currentTimeMillis(),
+            subfolder = playlistSubfolder,
+        )
+
+        assertEquals("Bollywood Classics", failedEntry.subfolder)
+
+        // Verify that subfolder resolution prioritizes download.subfolder
+        val resolvedSubfolder = failedEntry.subfolder?.takeIf { it.isNotBlank() }
+            ?: extractSubfolderFromUriString(failedEntry.localUri)
+            ?: ""
+
+        assertEquals(playlistSubfolder, resolvedSubfolder)
+
+        // Verify copied entry for YouTube auth keeps subfolder
+        val copiedForAuth = failedEntry.copy(subfolder = resolvedSubfolder)
+        assertEquals(playlistSubfolder, copiedForAuth.subfolder)
+    }
 }

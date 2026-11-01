@@ -221,6 +221,7 @@ data class DownloadEntry(
     val updatedAt: Long,
     /** [DownloadManager.COLUMN_REASON] when state is [DownloadState.Failed]; otherwise null. */
     val dmFailureCode: Int? = null,
+    val subfolder: String? = null,
 )
 
 data class LinkBatchEntry(
