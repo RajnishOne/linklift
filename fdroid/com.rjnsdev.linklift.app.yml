@@ -105,8 +105,15 @@ Builds:
     gradle:
       - yes
 
+  - versionName: '2.20'
+    versionCode: 30
+    commit: v2.20
+    subdir: app
+    gradle:
+      - yes
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '2.19'
-CurrentVersionCode: 29
+CurrentVersion: '2.20'
+CurrentVersionCode: 30
 

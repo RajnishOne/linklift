@@ -1,0 +1,5 @@
+- Added native high-speed MP3 audio conversion using embedded LAME encoder and MediaCodec
+- Supported seamless on-device MP3 transcoding for YouTube audio-only downloads
+- Added direct file sharing and source link copying to completed download items
+- Added interactive dialog offering re-analysis or re-download when opening a deleted or missing file
+- Added audio conversion progress notifications and UI status updates during transcoding
