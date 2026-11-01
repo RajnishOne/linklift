@@ -102,7 +102,14 @@ internal fun chooseAudioFormat(
         }
     }
     val matching = audioFormats.filter { matchesAudioPref(it) }
-    val pool = if (matching.isNotEmpty()) matching else audioFormats
+    val pool = if (matching.isNotEmpty()) {
+        matching
+    } else if (audioPref == AudioFormatPreference.Mp3) {
+        val m4aList = audioFormats.filter { it.ext.equals("m4a", ignoreCase = true) }
+        if (m4aList.isNotEmpty()) m4aList else audioFormats
+    } else {
+        audioFormats
+    }
     return pool.maxByOrNull { (it.abr ?: 0) * 1000L + (it.tbr ?: 0) } ?: pool.first()
 }
 

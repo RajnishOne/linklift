@@ -19,6 +19,7 @@ internal fun MergeJobRecord.toDownloadEntry(): DownloadEntry {
         MergeJobState.DownloadingVideo -> "Downloading video stream"
         MergeJobState.DownloadingAudio -> "Downloading audio stream"
         MergeJobState.Muxing -> "Combining video & audio"
+        MergeJobState.ConvertingAudio -> "Converting audio to MP3"
         MergeJobState.Completed -> "Saved to $folderLabel"
         MergeJobState.Failed -> errorMessage ?: "Failed"
         MergeJobState.Cancelled -> "Cancelled"
@@ -33,7 +34,8 @@ internal fun MergeJobRecord.toDownloadEntry(): DownloadEntry {
             MergeJobState.Queued -> DownloadState.Queued
             MergeJobState.DownloadingVideo,
             MergeJobState.DownloadingAudio,
-            MergeJobState.Muxing -> DownloadState.Downloading
+            MergeJobState.Muxing,
+            MergeJobState.ConvertingAudio -> DownloadState.Downloading
             MergeJobState.Completed -> DownloadState.Completed
             MergeJobState.Failed,
             MergeJobState.Cancelled -> DownloadState.Failed

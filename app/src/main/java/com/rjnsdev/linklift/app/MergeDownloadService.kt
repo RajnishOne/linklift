@@ -21,6 +21,7 @@ import android.os.IBinder
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.rjnsdev.linklift.app.util.AudioToMp3Converter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -309,6 +310,7 @@ class MergeDownloadService : Service() {
         val videoTemp = File(tempDir, "${jobId}_video.${videoExt}")
         val audioTemp = File(tempDir, "${jobId}_audio.${audioExt}")
         val muxedTemp = File(tempDir, "${jobId}_muxed.${outputExtension(outputFileName, mimeType)}")
+        val mp3Temp = File(tempDir, "${jobId}_converted.mp3")
 
         try {
             val hasVideo = videoUrl.isNotBlank()
@@ -363,6 +365,10 @@ class MergeDownloadService : Service() {
                 listOfNotNull(videoTask, audioTask).awaitAll()
             }
 
+            val isMp3Conversion = !hasVideo && hasAudio &&
+                (outputFileName.endsWith(".mp3", ignoreCase = true) || mimeType.equals("audio/mpeg", ignoreCase = true) || mimeType.equals("audio/mp3", ignoreCase = true)) &&
+                !audioExt.equals("mp3", ignoreCase = true)
+
             val finalSourceFile = if (hasVideo && hasAudio) {
                 updateState(jobId) { it.copy(state = MergeJobState.Muxing) }
                 muxFiles(
@@ -374,6 +380,18 @@ class MergeDownloadService : Service() {
                 muxedTemp
             } else if (hasVideo) {
                 videoTemp
+            } else if (isMp3Conversion) {
+                updateState(jobId) { it.copy(state = MergeJobState.ConvertingAudio) }
+                val currentJob = kotlinx.coroutines.currentCoroutineContext()[Job]
+                AudioToMp3Converter.convert(
+                    inputFile = audioTemp,
+                    outputFile = mp3Temp,
+                    title = title,
+                    artist = null,
+                    bitrateKbps = 192,
+                    isCancelled = { currentJob?.isActive != true },
+                )
+                mp3Temp
             } else {
                 audioTemp
             }
@@ -422,6 +440,7 @@ class MergeDownloadService : Service() {
             runCatching { if (videoTemp.exists()) videoTemp.delete() }
             runCatching { if (audioTemp.exists()) audioTemp.delete() }
             runCatching { if (muxedTemp.exists()) muxedTemp.delete() }
+            runCatching { if (mp3Temp.exists()) mp3Temp.delete() }
         }
     }
 
@@ -979,6 +998,7 @@ class MergeDownloadService : Service() {
             MergeJobState.DownloadingVideo -> "Downloading video"
             MergeJobState.DownloadingAudio -> "Downloading audio"
             MergeJobState.Muxing -> "Combining tracks"
+            MergeJobState.ConvertingAudio -> "Converting to MP3"
             MergeJobState.Completed -> "Saved"
             MergeJobState.Failed -> "Failed"
             MergeJobState.Cancelled -> "Cancelled"
@@ -995,7 +1015,8 @@ class MergeDownloadService : Service() {
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
 
         when (record.state) {
-            MergeJobState.Muxing -> builder.setProgress(0, 0, true)
+            MergeJobState.Muxing,
+            MergeJobState.ConvertingAudio -> builder.setProgress(0, 0, true)
             MergeJobState.DownloadingVideo,
             MergeJobState.DownloadingAudio -> {
                 if (total > 0L) builder.setProgress(100, percent, false)
@@ -1063,5 +1084,6 @@ class MergeDownloadService : Service() {
         MergeJobState.DownloadingVideo,
         MergeJobState.DownloadingAudio,
         MergeJobState.Muxing,
+        MergeJobState.ConvertingAudio,
     )
 }

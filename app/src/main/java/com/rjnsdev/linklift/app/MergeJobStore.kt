@@ -23,6 +23,7 @@ enum class MergeJobState {
     DownloadingVideo,
     DownloadingAudio,
     Muxing,
+    ConvertingAudio,
     Completed,
     Failed,
     Cancelled,
@@ -233,7 +234,8 @@ object MergeJobStore {
                         MergeJobState.Queued,
                         MergeJobState.DownloadingVideo,
                         MergeJobState.DownloadingAudio,
-                        MergeJobState.Muxing -> MergeJobState.Failed
+                        MergeJobState.Muxing,
+                        MergeJobState.ConvertingAudio -> MergeJobState.Failed
                         else -> state
                     }
                     put(

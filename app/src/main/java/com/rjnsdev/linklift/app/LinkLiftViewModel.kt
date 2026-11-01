@@ -682,7 +682,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
 
             val currentTarget = uiState.value.targetSubfolder.takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
             val downloadLoc = defaultDownloadLocation(currentTarget)
-            val useMergeService = finalFormat != null && shouldDownloadWithMergeService(finalFormat, sourceUrl)
+            val useMergeService = finalFormat != null && shouldDownloadWithMergeService(
+                format = finalFormat,
+                sourceUrl = sourceUrl,
+                audioPref = uiState.value.settings.preferredAudioFormat,
+            )
 
             if (useMergeService) {
                 enqueueMergeJob(
@@ -734,14 +738,18 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         subfolder: String? = null,
     ) {
         val audioFormat = format.mergeAudio // might be null
+        val isMp3Requested = format.isAudioOnly && (
+            format.ext.equals("mp3", ignoreCase = true) ||
+            uiState.value.settings.preferredAudioFormat == AudioFormatPreference.Mp3
+        )
         val outputExt = if (format.isAudioOnly) {
-            format.ext
+            if (isMp3Requested) "mp3" else format.ext
         } else when {
             format.ext.equals("webm", ignoreCase = true) -> "webm"
             else -> "mp4"
         }
         val outputMime = if (format.isAudioOnly) {
-            format.mimeType
+            if (isMp3Requested) "audio/mpeg" else format.mimeType
         } else if (outputExt == "webm") {
             "video/webm"
         } else {
@@ -758,12 +766,13 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val effectiveSubfolder = subfolder ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
         val downloadLoc = defaultDownloadLocation(effectiveSubfolder)
 
+        val formatLabel = if (isMp3Requested) "MP3 audio" else format.label
         MergeDownloadService.enqueue(
             context = appContext,
             jobId = jobId,
             sourceUrl = sourceUrl,
             title = item.title,
-            description = format.label,
+            description = formatLabel,
             outputFileName = outputFileName,
             mimeType = outputMime,
             videoUrl = if (format.isAudioOnly) "" else format.mediaUrl,
@@ -780,11 +789,17 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             subfolder = effectiveSubfolder,
         )
 
-        val actionLabel = if (format.requiresMerge) "Merging" else "Downloading"
+        val actionLabel = if (isMp3Requested && !format.ext.equals("mp3", ignoreCase = true)) {
+            "Converting"
+        } else if (format.requiresMerge) {
+            "Merging"
+        } else {
+            "Downloading"
+        }
         _uiState.update {
             it.copy(
                 currentScreen = AppScreen.Downloads,
-                message = "$actionLabel ${format.label} • saving to $downloadLoc",
+                message = "$actionLabel $formatLabel • saving to $downloadLoc",
                 targetSubfolder = it.settings.downloadSubfolder,
                 isFromShare = false,
             )
@@ -824,7 +839,12 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             val item = preview.items.getOrNull(idx) ?: return@forEach
             val formatId = state.selectedFormatIdsByItem[idx]
             val format = item.formats.firstOrNull { it.formatId == formatId }
-            if (format?.requiresMerge == true) {
+            val useMerge = format != null && shouldDownloadWithMergeService(
+                format = format,
+                sourceUrl = preview.sourceUrl,
+                audioPref = state.settings.preferredAudioFormat,
+            )
+            if (useMerge) {
                 merges += MergeQueue(item, format)
             } else {
                 standard += StandardQueue(
@@ -1128,7 +1148,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         audioPref = audioPref,
                         preferAudioOnly = preferAudioOnly,
                     )
-                    val useMergeService = chosen != null && shouldDownloadWithMergeService(chosen, entry.sourceUrl)
+                    val useMergeService = chosen != null && shouldDownloadWithMergeService(
+                        format = chosen,
+                        sourceUrl = entry.sourceUrl,
+                        audioPref = audioPref,
+                    )
                     if (useMergeService) {
                         runCatching {
                             enqueueMergeJob(
@@ -1563,7 +1587,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 // Remove the old failed download entry once resolved successfully
                 removeDownloadEntrySilently(download.id)
 
-                val useMergeService = chosen != null && shouldDownloadWithMergeService(chosen, sourceUrl)
+                val useMergeService = chosen != null && shouldDownloadWithMergeService(
+                    format = chosen,
+                    sourceUrl = sourceUrl,
+                    audioPref = audioPref,
+                )
                 if (useMergeService) {
                     enqueueMergeJob(
                         sourceUrl = sourceUrl,

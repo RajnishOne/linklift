@@ -138,8 +138,13 @@ internal fun shouldRefreshUrlBeforeDownload(url: String): Boolean {
     return isInstagramUrl(url)
 }
 
-internal fun shouldDownloadWithMergeService(format: MediaFormat, sourceUrl: String): Boolean {
+internal fun shouldDownloadWithMergeService(
+    format: MediaFormat,
+    sourceUrl: String,
+    audioPref: AudioFormatPreference = AudioFormatPreference.Any,
+): Boolean {
     if (format.requiresMerge) return true
+    if (format.isAudioOnly && audioPref == AudioFormatPreference.Mp3 && !format.ext.equals("mp3", ignoreCase = true)) return true
     if (isYouTubeUrl(sourceUrl) || format.mediaUrl.contains("googlevideo.com")) return true
     val host = getUriHost(sourceUrl).lowercase(Locale.ROOT)
     return host.contains("youtube.com") || host == "youtu.be" || host.contains("youtu.be")

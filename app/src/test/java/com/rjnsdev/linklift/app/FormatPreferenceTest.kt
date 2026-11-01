@@ -323,4 +323,128 @@ class FormatPreferenceTest {
         assertEquals("136", chosen?.formatId)
         assertEquals("mp4", chosen?.ext)
     }
+
+    @Test
+    fun chooseFormatForPreset_mp3Preference_withNativeMp3_picksMp3() {
+        val audioM4a = MediaFormat(
+            formatId = "140",
+            label = "Audio 128kbps M4A",
+            mediaUrl = "https://example.com/audio.m4a",
+            mimeType = "audio/mp4",
+            kind = MediaKind.Audio,
+            ext = "m4a",
+            height = null,
+            width = null,
+            fps = null,
+            abr = 128,
+            tbr = 128,
+            fileSizeBytes = 3000000L,
+            fileSizeApprox = false,
+            isAudioOnly = true,
+            isProgressive = false,
+            isVideoOnly = false,
+        )
+        val audioMp3 = MediaFormat(
+            formatId = "mp3-128",
+            label = "Audio 128kbps MP3",
+            mediaUrl = "https://example.com/audio.mp3",
+            mimeType = "audio/mpeg",
+            kind = MediaKind.Audio,
+            ext = "mp3",
+            height = null,
+            width = null,
+            fps = null,
+            abr = 128,
+            tbr = 128,
+            fileSizeBytes = 3000000L,
+            fileSizeApprox = false,
+            isAudioOnly = true,
+            isProgressive = false,
+            isVideoOnly = false,
+        )
+        val formats = listOf(audioM4a, audioMp3)
+
+        val chosen = chooseFormatForPreset(
+            formats = formats,
+            preset = QualityPreset.BestQuality,
+            audioPref = AudioFormatPreference.Mp3,
+            preferAudioOnly = true,
+        )
+        assertEquals("mp3-128", chosen?.formatId)
+        assertEquals("mp3", chosen?.ext)
+    }
+
+    @Test
+    fun chooseFormatForPreset_mp3Preference_withoutNativeMp3_picksM4aCandidate() {
+        val audioM4a = MediaFormat(
+            formatId = "140",
+            label = "Audio 128kbps M4A",
+            mediaUrl = "https://example.com/audio.m4a",
+            mimeType = "audio/mp4",
+            kind = MediaKind.Audio,
+            ext = "m4a",
+            height = null,
+            width = null,
+            fps = null,
+            abr = 128,
+            tbr = 128,
+            fileSizeBytes = 3000000L,
+            fileSizeApprox = false,
+            isAudioOnly = true,
+            isProgressive = false,
+            isVideoOnly = false,
+        )
+        val audioWebm = MediaFormat(
+            formatId = "251",
+            label = "Audio 160kbps Opus",
+            mediaUrl = "https://example.com/audio.webm",
+            mimeType = "audio/webm",
+            kind = MediaKind.Audio,
+            ext = "webm",
+            height = null,
+            width = null,
+            fps = null,
+            abr = 160,
+            tbr = 160,
+            fileSizeBytes = 3500000L,
+            fileSizeApprox = false,
+            isAudioOnly = true,
+            isProgressive = false,
+            isVideoOnly = false,
+        )
+        val formats = listOf(audioWebm, audioM4a)
+
+        val chosen = chooseFormatForPreset(
+            formats = formats,
+            preset = QualityPreset.BestQuality,
+            audioPref = AudioFormatPreference.Mp3,
+            preferAudioOnly = true,
+        )
+        assertEquals("140", chosen?.formatId)
+        assertEquals("m4a", chosen?.ext)
+    }
+
+    @Test
+    fun shouldDownloadWithMergeService_respectsMp3Preference() {
+        val audioM4a = MediaFormat(
+            formatId = "140",
+            label = "Audio 128kbps M4A",
+            mediaUrl = "https://cdn.example.com/audio.m4a",
+            mimeType = "audio/mp4",
+            kind = MediaKind.Audio,
+            ext = "m4a",
+            height = null,
+            width = null,
+            fps = null,
+            abr = 128,
+            tbr = 128,
+            fileSizeBytes = 3000000L,
+            fileSizeApprox = false,
+            isAudioOnly = true,
+            isProgressive = false,
+            isVideoOnly = false,
+        )
+        assertEquals(false, shouldDownloadWithMergeService(audioM4a, "https://example.com/song", AudioFormatPreference.M4a))
+        assertEquals(true, shouldDownloadWithMergeService(audioM4a, "https://example.com/song", AudioFormatPreference.Mp3))
+    }
 }
