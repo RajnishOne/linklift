@@ -1,0 +1,4 @@
+- Fixed issue where retrying a failed playlist video or audio download would save to the default folder instead of the playlist folder
+- Preserved destination subfolder for retried downloads across app restarts and network disruptions
+- Added persistent download subfolder tracking in storage and job history
+- Enhanced download reliability and error recovery for batch playlist extractions
