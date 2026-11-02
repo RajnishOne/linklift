@@ -1,0 +1,5 @@
+- Added legacy storage permission support and runtime prompts for Android 9 and lower
+- Aligned public download destination path with Android system directory (Download/LinkLift)
+- Pre-create download directories and subfolders on Android 9 to ensure reliable file saving
+- Registered downloaded media with Android MediaScanner on legacy devices for immediate file indexing
+- Improved UI folder display and path clarity across preview and batch screens
