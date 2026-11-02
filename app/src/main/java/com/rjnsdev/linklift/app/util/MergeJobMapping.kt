@@ -13,7 +13,7 @@ internal fun Long.absoluteValue(): Long = if (this < 0L) -this else this
 internal fun isMergeJobDownloadId(id: Long): Boolean = id <= MERGE_JOB_ID_OFFSET
 
 internal fun MergeJobRecord.toDownloadEntry(): DownloadEntry {
-    val folderLabel = if (subfolder.isNullOrBlank()) "Downloads/LinkLift" else "Downloads/LinkLift/${subfolder.trim().trim('/')}"
+    val folderLabel = if (subfolder.isNullOrBlank()) "Download/LinkLift" else "Download/LinkLift/${subfolder.trim().trim('/')}"
     val statusLabel = when (state) {
         MergeJobState.Queued -> "Queued for merging"
         MergeJobState.DownloadingVideo -> "Downloading video stream"

@@ -19,13 +19,13 @@ class DownloadLocationTest {
     @Test
     fun userPreferences_effectiveDownloadPath() {
         val rootPrefs = UserPreferences(downloadSubfolder = "")
-        assertEquals("Downloads/LinkLift", rootPrefs.effectiveDownloadPath)
+        assertEquals("Download/LinkLift", rootPrefs.effectiveDownloadPath)
 
         val customPrefs = UserPreferences(downloadSubfolder = "Music")
-        assertEquals("Downloads/LinkLift/Music", customPrefs.effectiveDownloadPath)
+        assertEquals("Download/LinkLift/Music", customPrefs.effectiveDownloadPath)
 
         val trimmedPrefs = UserPreferences(downloadSubfolder = "  Study/Lectures  ")
-        assertEquals("Downloads/LinkLift/Study/Lectures", trimmedPrefs.effectiveDownloadPath)
+        assertEquals("Download/LinkLift/Study/Lectures", trimmedPrefs.effectiveDownloadPath)
     }
 
     @Test
@@ -48,12 +48,12 @@ class DownloadLocationTest {
             subfolder = null,
         )
         val rootEntry = rootRecord.toDownloadEntry()
-        assertEquals("1080p • Saved to Downloads/LinkLift", rootEntry.description)
+        assertEquals("1080p • Saved to Download/LinkLift", rootEntry.description)
         assertEquals(null, rootEntry.subfolder)
 
         val subfolderRecord = rootRecord.copy(subfolder = "History")
         val subfolderEntry = subfolderRecord.toDownloadEntry()
-        assertEquals("1080p • Saved to Downloads/LinkLift/History", subfolderEntry.description)
+        assertEquals("1080p • Saved to Download/LinkLift/History", subfolderEntry.description)
         assertEquals("History", subfolderEntry.subfolder)
     }
 

@@ -13,6 +13,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -852,7 +853,7 @@ class MergeDownloadService : Service() {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             publishViaMediaStore(source, fileName, mimeType, description, subfolder)
         } else {
-            publishViaLegacyFile(source, fileName, subfolder)
+            publishViaLegacyFile(source, fileName, mimeType, subfolder)
         }
     }
 
@@ -897,15 +898,36 @@ class MergeDownloadService : Service() {
     }
 
     @Suppress("DEPRECATION")
-    private fun publishViaLegacyFile(source: File, fileName: String, subfolder: String? = null): Uri {
+    private fun publishViaLegacyFile(
+        source: File,
+        fileName: String,
+        mimeType: String,
+        subfolder: String? = null,
+    ): Uri {
         val clean = sanitizeSubfolder(subfolder)
         val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
         val baseDir = File(dir, "LinkLift")
         val targetDir = if (clean.isBlank()) baseDir else File(baseDir, clean)
-        targetDir.mkdirs()
+        if (!targetDir.exists()) {
+            val created = targetDir.mkdirs()
+            if (!created && !targetDir.exists()) {
+                throw IOException("Failed to create download directory: ${targetDir.absolutePath}")
+            }
+        }
         val target = File(targetDir, fileName)
         FileInputStream(source).use { input ->
             FileOutputStream(target).use { out -> input.copyTo(out) }
+        }
+        runCatching {
+            MediaScannerConnection.scanFile(
+                applicationContext,
+                arrayOf(target.absolutePath),
+                arrayOf(mimeType),
+                null,
+            )
         }
         return Uri.fromFile(target)
     }
@@ -1051,7 +1073,7 @@ class MergeDownloadService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(title)
-            .setContentText("Saved to Downloads/LinkLift")
+            .setContentText("Saved to Download/LinkLift")
             .setContentIntent(createTapPendingIntent(downloadId = downloadId, requestCode = notifId))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

@@ -33,6 +33,23 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission(),
     ) { _ -> }
 
+    private var pendingDownloadAction: (() -> Unit)? = null
+
+    /**
+     * Android 9 and lower (API <= 28) requires [Manifest.permission.WRITE_EXTERNAL_STORAGE]
+     * to save to public Download/LinkLift directory.
+     */
+    private val requestStoragePermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        if (isGranted) {
+            pendingDownloadAction?.invoke()
+        } else {
+            viewModel.showMessage("Storage permission is required to save downloads on Android 9 and below.")
+        }
+        pendingDownloadAction = null
+    }
+
     /** Android 13+ (API 33): runtime permission or no DownloadManager / app notifications. */
     private fun requestPostNotificationsIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
@@ -46,6 +63,24 @@ class MainActivity : ComponentActivity() {
         requestPostNotificationsPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
+    private fun ensureDownloadPermissions(onGranted: () -> Unit) {
+        requestPostNotificationsIfNeeded()
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                onGranted()
+            } else {
+                pendingDownloadAction = onGranted
+                requestStoragePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            }
+        } else {
+            onGranted()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -53,7 +88,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             LinkLiftRoot(
                 viewModel = viewModel,
-                ensureNotificationPermission = ::requestPostNotificationsIfNeeded,
+                ensureDownloadPermission = ::ensureDownloadPermissions,
             )
         }
         handleIncomingShareIntent(intent)

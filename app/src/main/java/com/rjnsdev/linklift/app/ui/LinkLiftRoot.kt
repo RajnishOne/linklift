@@ -64,8 +64,8 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRed
 @Composable
 internal fun LinkLiftRoot(
     viewModel: LinkLiftViewModel,
-    /** Call before queueing a download so Android 13+ can show DownloadManager / FGS notifications. */
-    ensureNotificationPermission: () -> Unit = {},
+    /** Call before queueing a download to check storage (API <= 28) and notifications (API 33+). */
+    ensureDownloadPermission: (onGranted: () -> Unit) -> Unit = { it() },
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -77,7 +77,9 @@ internal fun LinkLiftRoot(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             viewModel.refreshCookieStatus()
-            viewModel.retryPendingAuthDownload()
+            ensureDownloadPermission {
+                viewModel.retryPendingAuthDownload()
+            }
         }
     }
 
@@ -170,12 +172,14 @@ internal fun LinkLiftRoot(
                             onAudioOnlyToggled = viewModel::setAudioOnlyFilter,
                             onItemSelected = viewModel::selectPreviewItem,
                             onDownload = {
-                                ensureNotificationPermission()
-                                viewModel.queueDownload()
+                                ensureDownloadPermission {
+                                    viewModel.queueDownload()
+                                }
                             },
                             onDownloadAll = {
-                                ensureNotificationPermission()
-                                viewModel.queueAllDownloads()
+                                ensureDownloadPermission {
+                                    viewModel.queueAllDownloads()
+                                }
                             },
                             onToggleItem = viewModel::toggleCarouselItem,
                             onSelectAllItems = viewModel::selectAllCarouselItems,
@@ -192,7 +196,9 @@ internal fun LinkLiftRoot(
                             onOpenQualityDialog = { viewModel.openBatchQualityDialog(forPendingDownload = false) },
                             onSelectQualityPreset = { preset ->
                                 if (uiState.pendingBatchDownloadAfterQuality) {
-                                    viewModel.confirmBatchQualityAndDownload(preset)
+                                    ensureDownloadPermission {
+                                        viewModel.confirmBatchQualityAndDownload(preset)
+                                    }
                                 } else {
                                     viewModel.setBatchQualityPreset(preset)
                                 }
@@ -206,8 +212,9 @@ internal fun LinkLiftRoot(
                                 }
                             },
                             onDownload = {
-                                ensureNotificationPermission()
-                                viewModel.downloadSelectedBatchEntries()
+                                ensureDownloadPermission {
+                                    viewModel.downloadSelectedBatchEntries()
+                                }
                             },
                             onSelectTargetSubfolder = viewModel::setTargetSubfolder,
                             onCreateSubfolder = viewModel::addCustomSubfolder,
@@ -218,8 +225,9 @@ internal fun LinkLiftRoot(
                             onRegenerateTracked = viewModel::regenerateTrackedDownload,
                             onCancelDownload = viewModel::cancelDownload,
                             onRetryDownload = { download ->
-                                ensureNotificationPermission()
-                                viewModel.retryDownload(download)
+                                ensureDownloadPermission {
+                                    viewModel.retryDownload(download)
+                                }
                             },
                             onPromptYouTubeAuth = { download ->
                                 viewModel.promptYouTubeAuth(

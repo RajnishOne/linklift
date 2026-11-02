@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.os.SystemClock
 import android.util.Patterns
@@ -1337,6 +1338,17 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 "LinkLift/${item.fileName}"
             } else {
                 "LinkLift/$cleanSubfolder/${item.fileName}"
+            }
+            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    val publicDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                    val baseDir = File(publicDir, "LinkLift")
+                    val targetDir = if (cleanSubfolder.isBlank()) baseDir else File(baseDir, cleanSubfolder)
+                    if (!targetDir.exists()) {
+                        targetDir.mkdirs()
+                    }
+                }
             }
             val request = DownloadManager.Request(Uri.parse(item.resolvedUrl))
                 .setTitle(item.title)
@@ -3241,7 +3253,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             state?.targetSubfolder?.takeIf { it.isNotBlank() } ?: state?.settings?.downloadSubfolder
         }
         val clean = MergeDownloadService.sanitizeSubfolder(target)
-        return if (clean.isBlank()) "Downloads/LinkLift" else "Downloads/LinkLift/$clean"
+        return if (clean.isBlank()) "Download/LinkLift" else "Download/LinkLift/$clean"
     }
 
     fun refreshCookieStatus() {

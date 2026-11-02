@@ -88,9 +88,9 @@ internal fun FolderSelectionDialog(
                     fontWeight = FontWeight.SemiBold,
                 )
                 val currentPath = if (activeSelection.isBlank()) {
-                    "Downloads/LinkLift"
+                    "Download/LinkLift"
                 } else {
-                    "Downloads/LinkLift/$activeSelection"
+                    "Download/LinkLift/$activeSelection"
                 }
                 Text(
                     text = "Saving to: $currentPath",
@@ -113,7 +113,7 @@ internal fun FolderSelectionDialog(
                     item {
                         FolderOptionRow(
                             name = "Main folder (LinkLift)",
-                            fullPath = "Downloads/LinkLift",
+                            fullPath = "Download/LinkLift",
                             isSelected = activeSelection.isBlank(),
                             isRoot = true,
                             onSelect = {
@@ -127,7 +127,7 @@ internal fun FolderSelectionDialog(
                     items(sanitizedAvailable) { folderName ->
                         FolderOptionRow(
                             name = folderName,
-                            fullPath = "Downloads/LinkLift/$folderName",
+                            fullPath = "Download/LinkLift/$folderName",
                             isSelected = activeSelection.equals(folderName, ignoreCase = true),
                             isRoot = false,
                             onSelect = {

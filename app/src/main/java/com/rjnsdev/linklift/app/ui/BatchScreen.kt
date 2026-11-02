@@ -368,9 +368,9 @@ internal fun BatchScreen(
 
         item {
             val destinationPath = if (uiState.targetSubfolder.isBlank()) {
-                "Downloads/LinkLift"
+                "Download/LinkLift"
             } else {
-                "Downloads/LinkLift/${uiState.targetSubfolder}"
+                "Download/LinkLift/${uiState.targetSubfolder}"
             }
             DownloadDestinationChip(
                 destinationPath = destinationPath,
