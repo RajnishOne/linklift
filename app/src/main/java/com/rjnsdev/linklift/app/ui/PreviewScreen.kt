@@ -278,9 +278,9 @@ internal fun PreviewScreen(
 
         item {
             val destinationPath = if (uiState.targetSubfolder.isBlank()) {
-                "Downloads/LinkLift"
+                "Download/LinkLift"
             } else {
-                "Downloads/LinkLift/${uiState.targetSubfolder}"
+                "Download/LinkLift/${uiState.targetSubfolder}"
             }
             DownloadDestinationChip(
                 destinationPath = destinationPath,
@@ -597,7 +597,7 @@ internal fun FormatRow(
                 }
                 if (format.requiresMerge) {
                     Text(
-                        text = "Muxes video and audio. Saves to Downloads/LinkLift.",
+                        text = "Muxes video and audio. Saves to Download/LinkLift.",
                         style = MaterialTheme.typography.bodySmall,
                         color = LinkLiftTextSecondary.copy(alpha = 0.85f),
                     )

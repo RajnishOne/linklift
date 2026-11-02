@@ -140,14 +140,14 @@ data class UserPreferences(
     val preferredVideoFormat: VideoFormatPreference = VideoFormatPreference.Any,
     val preferredAudioFormat: AudioFormatPreference = AudioFormatPreference.Any,
     val enableOnlineVideoPreview: Boolean = true,
-    val downloadLocation: String = "Downloads/LinkLift",
+    val downloadLocation: String = "Download/LinkLift",
     val downloadSubfolder: String = "",
     val customSubfolders: Set<String> = emptySet(),
     val hasYouTubeCookies: Boolean = false,
     val youtubeCookiesLastModified: Long = 0L,
 ) {
     val effectiveDownloadPath: String
-        get() = if (downloadSubfolder.isBlank()) "Downloads/LinkLift" else "Downloads/LinkLift/${downloadSubfolder.trim().trim('/')}"
+        get() = if (downloadSubfolder.isBlank()) "Download/LinkLift" else "Download/LinkLift/${downloadSubfolder.trim().trim('/')}"
 }
 
 data class MediaFormat(
