@@ -1,10 +1,14 @@
 package com.rjnsdev.linklift.app
 
+import android.app.DownloadManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -181,3 +185,181 @@ internal fun extractSubfolderFromUriString(uriString: String?): String? {
         }
     }.getOrNull()
 }
+
+private fun deleteFileByPath(context: Context?, path: String): Boolean {
+    val file = File(path)
+    if (!file.exists()) return false
+
+    var deleted = runCatching { file.delete() }.getOrDefault(false)
+
+    if (!deleted && file.exists() && context != null) {
+        // Attempt deletion via MediaStore
+        deleted = runCatching {
+            val resolver = context.contentResolver
+            val contentUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            } else {
+                MediaStore.Files.getContentUri("external")
+            }
+            val count = resolver.delete(
+                contentUri,
+                "${MediaStore.MediaColumns.DATA} = ?",
+                arrayOf(file.absolutePath),
+            )
+            count > 0 || !file.exists()
+        }.getOrDefault(false)
+
+        if (!deleted && file.exists()) {
+            deleted = runCatching {
+                val resolver = context.contentResolver
+                val filesUri = MediaStore.Files.getContentUri("external")
+                val count = resolver.delete(
+                    filesUri,
+                    "${MediaStore.MediaColumns.DATA} = ?",
+                    arrayOf(file.absolutePath),
+                )
+                count > 0 || !file.exists()
+            }.getOrDefault(false)
+        }
+    }
+
+    if (deleted && context != null) {
+        runCatching {
+            MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null, null)
+        }
+    }
+
+    return deleted
+}
+
+private fun resolveAndAttemptDeleteFile(
+    context: Context?,
+    rawPath: String,
+    fullUriString: String? = null,
+): Boolean {
+    // 1. Direct raw path
+    if (File(rawPath).exists()) {
+        return deleteFileByPath(context, rawPath)
+    }
+
+    // 2. java.net.URI path if URI provided or parseable (handles %20 while preserving +)
+    if (!fullUriString.isNullOrBlank()) {
+        val uriPath = runCatching { java.net.URI(fullUriString).path }.getOrNull()
+        if (!uriPath.isNullOrBlank() && File(uriPath).exists()) {
+            return deleteFileByPath(context, uriPath)
+        }
+    }
+
+    // 3. Simple space decode (%20 -> space), preserving '+'
+    val spaceDecoded = rawPath.replace("%20", " ")
+    if (File(spaceDecoded).exists()) {
+        return deleteFileByPath(context, spaceDecoded)
+    }
+
+    // 4. URLDecoder fallback
+    val urlDecoded = runCatching { java.net.URLDecoder.decode(rawPath, "UTF-8") }.getOrNull()
+    if (!urlDecoded.isNullOrBlank() && File(urlDecoded).exists()) {
+        return deleteFileByPath(context, urlDecoded)
+    }
+
+    return false
+}
+
+internal fun deleteDownloadedPhysicalFile(context: Context?, localUri: String?): Boolean {
+    if (localUri.isNullOrBlank()) return false
+    var deleted = false
+    runCatching {
+        val trimmed = localUri.trim()
+        when {
+            trimmed.startsWith("/") -> {
+                deleted = resolveAndAttemptDeleteFile(context, trimmed)
+            }
+            trimmed.startsWith("file://", ignoreCase = true) -> {
+                val rawPath = trimmed.substring(7)
+                deleted = resolveAndAttemptDeleteFile(context, rawPath, trimmed)
+            }
+            trimmed.startsWith("content://", ignoreCase = true) -> {
+                if (context != null) {
+                    val uri = Uri.parse(trimmed)
+
+                    // If it is a DownloadProvider URI (e.g. content://downloads/all_downloads/<id> or my_downloads/<id>),
+                    // resolve via DownloadManager to get the actual file path and MediaProvider URI.
+                    if (trimmed.startsWith("content://downloads/", ignoreCase = true)) {
+                        val downloadId = uri.lastPathSegment?.toLongOrNull()
+                        if (downloadId != null) {
+                            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+                            if (dm != null) {
+                                val (localPath, mediaUri) = runCatching {
+                                    dm.query(DownloadManager.Query().setFilterById(downloadId))?.use { cursor ->
+                                        if (cursor.moveToFirst()) {
+                                            val localCol = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                                            val loc = if (localCol >= 0) cursor.getString(localCol) else null
+                                            val mediaCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                                cursor.getColumnIndex(DownloadManager.COLUMN_MEDIAPROVIDER_URI)
+                                            } else -1
+                                            val med = if (mediaCol >= 0) cursor.getString(mediaCol) else null
+                                            Pair(loc, med)
+                                        } else null
+                                    }
+                                }.getOrNull() ?: Pair(null, null)
+
+                                if (!localPath.isNullOrBlank()) {
+                                    val pathDeleted = deleteDownloadedPhysicalFile(context, localPath)
+                                    if (pathDeleted) deleted = true
+                                }
+                                if (!mediaUri.isNullOrBlank()) {
+                                    val mediaDeleted = deleteDownloadedPhysicalFile(context, mediaUri)
+                                    if (mediaDeleted) deleted = true
+                                }
+                                runCatching { dm.remove(downloadId) }
+                            }
+                        }
+                    }
+
+                    val dataPath = runCatching {
+                        context.contentResolver.query(
+                            uri,
+                            arrayOf(MediaStore.MediaColumns.DATA),
+                            null,
+                            null,
+                            null,
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val col = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                                if (col >= 0) cursor.getString(col) else null
+                            } else null
+                        }
+                    }.getOrNull()
+
+                    val rowsDeleted = runCatching {
+                        context.contentResolver.delete(uri, null, null)
+                    }.getOrDefault(0)
+
+                    if (rowsDeleted > 0) {
+                        deleted = true
+                    }
+
+                    if (!dataPath.isNullOrBlank()) {
+                        val file = File(dataPath)
+                        if (file.exists()) {
+                            val fileDeleted = runCatching { file.delete() }.getOrDefault(false)
+                            if (fileDeleted) {
+                                deleted = true
+                            }
+                        }
+                        if (deleted) {
+                            runCatching {
+                                MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null, null)
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {
+                deleted = resolveAndAttemptDeleteFile(context, trimmed)
+            }
+        }
+    }
+    return deleted
+}
+

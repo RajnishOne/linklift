@@ -221,6 +221,7 @@ internal fun LinkLiftRoot(
                         )
                         AppScreen.Downloads -> DownloadsScreen(
                             downloads = uiState.downloads,
+                            onDeleteDownloads = viewModel::deleteDownloads,
                             onRemoveTracked = viewModel::removeTrackedDownloads,
                             onRegenerateTracked = viewModel::regenerateTrackedDownload,
                             onCancelDownload = viewModel::cancelDownload,
