@@ -81,6 +81,7 @@ private val MERGE_JOBS_KEY = stringPreferencesKey("merge_jobs_v1")
 
 object MergeJobStore {
     const val ERROR_DOWNLOAD_INTERRUPTED = "Download interrupted when app closed"
+    const val ERROR_EMPTY_MEDIA_URL = "No valid media stream URL found"
     private const val UI_EMIT_INTERVAL_MS = 1_000L
     private const val PERSIST_INTERVAL_MS = 8_000L
 
@@ -204,13 +205,19 @@ object MergeJobStore {
         }
     }
 
-    fun upsert(context: Context, record: MergeJobRecord) {
+    fun upsert(record: MergeJobRecord, context: Context? = null) {
         val sanitized = record.copy(updatedAt = System.currentTimeMillis())
         latestById[sanitized.id] = sanitized
         _jobs.update { current -> current + (sanitized.id to sanitized) }
         lastUiEmitAt[sanitized.id] = System.currentTimeMillis()
         lastPersistAt[sanitized.id] = System.currentTimeMillis()
-        persist(context)
+        if (context != null) {
+            persist(context)
+        }
+    }
+
+    fun upsert(context: Context, record: MergeJobRecord) {
+        upsert(record, context)
     }
 
     fun update(context: Context, id: String, transform: (MergeJobRecord) -> MergeJobRecord) {
@@ -270,12 +277,15 @@ object MergeJobStore {
     private fun persist(context: Context) {
         ioScope.launch {
             persistMutex.withLock {
-                val payload = serialize(snapshot())
-                context.applicationContext.mergeJobDataStore.edit { prefs ->
-                    if (payload.isBlank()) {
-                        prefs.remove(MERGE_JOBS_KEY)
-                    } else {
-                        prefs[MERGE_JOBS_KEY] = payload
+                runCatching {
+                    val appContext = runCatching { context.applicationContext }.getOrNull() ?: context
+                    val payload = serialize(snapshot())
+                    appContext.mergeJobDataStore.edit { prefs ->
+                        if (payload.isBlank()) {
+                            prefs.remove(MERGE_JOBS_KEY)
+                        } else {
+                            prefs[MERGE_JOBS_KEY] = payload
+                        }
                     }
                 }
             }

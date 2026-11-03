@@ -111,8 +111,12 @@ class MergeDownloadService : Service() {
             runningJobIds.clear()
         }
 
+        internal var startForegroundServiceInvoker: ((Context, Intent) -> Unit) = { ctx, intent ->
+            androidx.core.content.ContextCompat.startForegroundService(ctx, intent)
+        }
+
         fun enqueue(
-            context: Context,
+            context: Context? = null,
             jobId: String,
             sourceUrl: String,
             title: String,
@@ -129,8 +133,31 @@ class MergeDownloadService : Service() {
             audioSize: Long,
             subfolder: String? = null,
         ) {
+            if (videoUrl.isBlank() && audioUrl.isBlank()) {
+                runningJobIds.remove(jobId)
+                val failedRecord = MergeJobRecord(
+                    id = jobId,
+                    title = title.ifBlank { "Merge download" },
+                    description = description,
+                    sourceUrl = sourceUrl,
+                    outputFileName = outputFileName.ifBlank { "$jobId.mp4" },
+                    state = MergeJobState.Failed,
+                    videoBytes = 0L,
+                    videoTotal = videoSize,
+                    audioBytes = 0L,
+                    audioTotal = audioSize,
+                    resultUri = null,
+                    errorMessage = MergeJobStore.ERROR_EMPTY_MEDIA_URL,
+                    updatedAt = System.currentTimeMillis(),
+                    mimeType = mimeType.ifBlank { "video/mp4" },
+                    subfolder = sanitizeSubfolder(subfolder).takeIf { it.isNotBlank() },
+                )
+                MergeJobStore.upsert(failedRecord, context)
+                return
+            }
             runningJobIds.add(jobId)
-            val intent = Intent(context, MergeDownloadService::class.java).apply {
+            val nonNullContext = context ?: return
+            val intent = Intent(nonNullContext, MergeDownloadService::class.java).apply {
                 action = ACTION_START_MERGE
                 putExtra(EXTRA_JOB_ID, jobId)
                 putExtra(EXTRA_SOURCE_URL, sourceUrl)
@@ -148,7 +175,7 @@ class MergeDownloadService : Service() {
                 putExtra(EXTRA_AUDIO_SIZE, audioSize)
                 putExtra(EXTRA_AUDIO_HEADERS, headersToBundle(audioHeaders))
             }
-            androidx.core.content.ContextCompat.startForegroundService(context, intent)
+            startForegroundServiceInvoker(nonNullContext, intent)
         }
 
         fun cancel(context: Context, jobId: String) {
@@ -218,19 +245,20 @@ class MergeDownloadService : Service() {
         super.onDestroy()
     }
 
-    private fun handleStart(intent: Intent) {
-        val jobId = intent.getStringExtra(EXTRA_JOB_ID) ?: return
-        runningJobIds.add(jobId)
+    internal var startForegroundDispatcher: ((MergeJobRecord) -> Unit)? = null
+    internal var stopForegroundDispatcher: (() -> Unit)? = null
+    internal var stopSelfDispatcher: (() -> Unit)? = null
+
+    internal fun hasActiveWork(): Boolean =
+        runningJobIds.isNotEmpty() || synchronized(activeJobs) { activeJobs.isNotEmpty() }
+
+    internal fun handleStart(intent: Intent) {
+        val jobId = intent.getStringExtra(EXTRA_JOB_ID)
         val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL).orEmpty()
         val audioUrl = intent.getStringExtra(EXTRA_AUDIO_URL).orEmpty()
-        if (videoUrl.isBlank() && audioUrl.isBlank()) {
-            runningJobIds.remove(jobId)
-            return
-        }
-
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "Merge download" }
         val description = intent.getStringExtra(EXTRA_DESCRIPTION).orEmpty()
-        val outputFileName = intent.getStringExtra(EXTRA_OUTPUT_FILENAME).orEmpty().ifBlank { "$jobId.mp4" }
+        val outputFileName = intent.getStringExtra(EXTRA_OUTPUT_FILENAME).orEmpty().ifBlank { "${jobId ?: "unknown"}.mp4" }
         val mimeType = intent.getStringExtra(EXTRA_MIME_TYPE).orEmpty().ifBlank { "video/mp4" }
         val sourceUrl = intent.getStringExtra(EXTRA_SOURCE_URL).orEmpty()
         val videoExt = intent.getStringExtra(EXTRA_VIDEO_EXT).orEmpty().ifBlank { "mp4" }
@@ -241,6 +269,96 @@ class MergeDownloadService : Service() {
         val audioHeaders = bundleToHeaders(intent.getBundleExtra(EXTRA_AUDIO_HEADERS))
         val subfolder = sanitizeSubfolder(intent.getStringExtra(EXTRA_SUBFOLDER)).takeIf { it.isNotBlank() }
 
+        processStartMerge(
+            jobId = jobId,
+            videoUrl = videoUrl,
+            audioUrl = audioUrl,
+            title = title,
+            description = description,
+            outputFileName = outputFileName,
+            mimeType = mimeType,
+            sourceUrl = sourceUrl,
+            videoExt = videoExt,
+            audioExt = audioExt,
+            videoSize = videoSize,
+            audioSize = audioSize,
+            videoHeaders = videoHeaders,
+            audioHeaders = audioHeaders,
+            subfolder = subfolder,
+        )
+    }
+
+    internal fun processStartMerge(
+        jobId: String?,
+        videoUrl: String,
+        audioUrl: String,
+        title: String,
+        description: String,
+        outputFileName: String,
+        mimeType: String,
+        sourceUrl: String,
+        videoExt: String = "mp4",
+        audioExt: String = "m4a",
+        videoSize: Long = 0L,
+        audioSize: Long = 0L,
+        videoHeaders: Map<String, String> = emptyMap(),
+        audioHeaders: Map<String, String> = emptyMap(),
+        subfolder: String? = null,
+    ) {
+        if (jobId.isNullOrBlank()) {
+            val fallback = MergeJobRecord(
+                id = "unknown",
+                title = "Merge download",
+                description = "",
+                sourceUrl = "",
+                outputFileName = "unknown.mp4",
+                state = MergeJobState.Failed,
+                videoBytes = 0L,
+                videoTotal = 0L,
+                audioBytes = 0L,
+                audioTotal = 0L,
+                resultUri = null,
+                errorMessage = "Invalid job id",
+                updatedAt = System.currentTimeMillis(),
+                mimeType = "video/mp4",
+            )
+            startForegroundIfNeeded(fallback)
+            if (!hasActiveWork()) {
+                stopForegroundCompat()
+                stopSelfCompat()
+            }
+            return
+        }
+
+        if (videoUrl.isBlank() && audioUrl.isBlank()) {
+            runningJobIds.remove(jobId)
+            val failedRecord = MergeJobRecord(
+                id = jobId,
+                title = title,
+                description = description,
+                sourceUrl = sourceUrl,
+                outputFileName = outputFileName,
+                state = MergeJobState.Failed,
+                videoBytes = 0L,
+                videoTotal = 0L,
+                audioBytes = 0L,
+                audioTotal = 0L,
+                resultUri = null,
+                errorMessage = MergeJobStore.ERROR_EMPTY_MEDIA_URL,
+                updatedAt = System.currentTimeMillis(),
+                mimeType = mimeType,
+                subfolder = subfolder,
+            )
+            MergeJobStore.upsert(failedRecord, runCatching { applicationContext }.getOrNull())
+            startForegroundIfNeeded(failedRecord)
+            if (!hasActiveWork()) {
+                stopForegroundCompat()
+                stopSelfCompat()
+            }
+            return
+        }
+
+        runningJobIds.add(jobId)
         val initial = MergeJobRecord(
             id = jobId,
             title = title,
@@ -258,7 +376,7 @@ class MergeDownloadService : Service() {
             mimeType = mimeType,
             subfolder = subfolder,
         )
-        MergeJobStore.upsert(applicationContext, initial)
+        MergeJobStore.upsert(initial, runCatching { applicationContext }.getOrNull())
         startForegroundIfNeeded(initial)
 
         serviceScope.launch {
@@ -313,7 +431,7 @@ class MergeDownloadService : Service() {
             activeJobs.remove(jobId)
             if (activeJobs.isEmpty()) {
                 stopForegroundCompat()
-                stopSelf()
+                stopSelfCompat()
             }
         }
     }
@@ -988,6 +1106,11 @@ class MergeDownloadService : Service() {
     }
 
     private fun startForegroundIfNeeded(record: MergeJobRecord) {
+        val customDispatcher = startForegroundDispatcher
+        if (customDispatcher != null) {
+            customDispatcher(record)
+            return
+        }
         val notification = buildSummaryNotification(record)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
@@ -1007,12 +1130,26 @@ class MergeDownloadService : Service() {
     }
 
     private fun stopForegroundCompat() {
+        val customDispatcher = stopForegroundDispatcher
+        if (customDispatcher != null) {
+            customDispatcher()
+            return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {
             @Suppress("DEPRECATION")
             stopForeground(true)
         }
+    }
+
+    private fun stopSelfCompat() {
+        val customDispatcher = stopSelfDispatcher
+        if (customDispatcher != null) {
+            customDispatcher()
+            return
+        }
+        stopSelf()
     }
 
     private suspend fun observeJobsForSummary() {

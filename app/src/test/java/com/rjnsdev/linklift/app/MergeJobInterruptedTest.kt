@@ -252,4 +252,151 @@ class MergeJobInterruptedTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testEnqueueWithEmptyMediaUrlsFailsWithoutStartingService() {
+        var startForegroundServiceCalled = false
+        val originalInvoker = MergeDownloadService.startForegroundServiceInvoker
+        try {
+            MergeDownloadService.startForegroundServiceInvoker = { _, _ ->
+                startForegroundServiceCalled = true
+            }
+
+            MergeDownloadService.enqueue(
+                context = null,
+                jobId = "test-blank-urls",
+                sourceUrl = "https://example.com/video",
+                title = "Blank Test",
+                description = "720p",
+                outputFileName = "test.mp4",
+                mimeType = "video/mp4",
+                videoUrl = "",
+                videoExt = "mp4",
+                videoHeaders = emptyMap(),
+                videoSize = 0L,
+                audioUrl = "   ",
+                audioExt = "m4a",
+                audioHeaders = emptyMap(),
+                audioSize = 0L,
+            )
+
+            assertFalse("Foreground service must NOT be started for empty URLs", startForegroundServiceCalled)
+            assertFalse("Job must not be marked active", MergeDownloadService.isJobActive("test-blank-urls"))
+
+            val record = MergeJobStore.snapshot()["test-blank-urls"]
+            assertEquals(MergeJobState.Failed, record?.state)
+            assertEquals(MergeJobStore.ERROR_EMPTY_MEDIA_URL, record?.errorMessage)
+        } finally {
+            MergeDownloadService.startForegroundServiceInvoker = originalInvoker
+        }
+    }
+
+    @Test
+    fun testProcessStartMergeEmptyMediaUrlsSatisfiesForegroundContract() {
+        val service = MergeDownloadService()
+        val events = mutableListOf<String>()
+
+        service.startForegroundDispatcher = { record ->
+            events.add("startForeground:${record.id}")
+        }
+        service.stopForegroundDispatcher = {
+            events.add("stopForeground")
+        }
+        service.stopSelfDispatcher = {
+            events.add("stopSelf")
+        }
+
+        service.processStartMerge(
+            jobId = "empty-job-123",
+            videoUrl = "",
+            audioUrl = "",
+            title = "Empty Job",
+            description = "Test",
+            outputFileName = "test.mp4",
+            mimeType = "video/mp4",
+            sourceUrl = "https://example.com",
+        )
+
+        assertEquals(
+            "startForeground must be called before stopForeground and stopSelf to satisfy Android contract",
+            listOf("startForeground:empty-job-123", "stopForeground", "stopSelf"),
+            events,
+        )
+
+        assertFalse("Job must not be active", MergeDownloadService.isJobActive("empty-job-123"))
+        val record = MergeJobStore.snapshot()["empty-job-123"]
+        assertEquals(MergeJobState.Failed, record?.state)
+        assertEquals(MergeJobStore.ERROR_EMPTY_MEDIA_URL, record?.errorMessage)
+    }
+
+    @Test
+    fun testProcessStartMergeNullOrBlankJobIdSatisfiesForegroundContract() {
+        val service = MergeDownloadService()
+        val events = mutableListOf<String>()
+
+        service.startForegroundDispatcher = { record ->
+            events.add("startForeground:${record.id}")
+        }
+        service.stopForegroundDispatcher = {
+            events.add("stopForeground")
+        }
+        service.stopSelfDispatcher = {
+            events.add("stopSelf")
+        }
+
+        service.processStartMerge(
+            jobId = null,
+            videoUrl = "",
+            audioUrl = "",
+            title = "Null Job",
+            description = "Test",
+            outputFileName = "test.mp4",
+            mimeType = "video/mp4",
+            sourceUrl = "https://example.com",
+        )
+
+        assertEquals(
+            listOf("startForeground:unknown", "stopForeground", "stopSelf"),
+            events,
+        )
+    }
+
+    @Test
+    fun testProcessStartMergeDoesNotStopSelfWhenOtherJobsActive() {
+        val service = MergeDownloadService()
+        val events = mutableListOf<String>()
+
+        service.startForegroundDispatcher = { record ->
+            events.add("startForeground:${record.id}")
+        }
+        service.stopForegroundDispatcher = {
+            events.add("stopForeground")
+        }
+        service.stopSelfDispatcher = {
+            events.add("stopSelf")
+        }
+
+        // Mark another job active
+        MergeDownloadService.markJobActiveForTest("running-job-456")
+
+        service.processStartMerge(
+            jobId = "empty-job-789",
+            videoUrl = "",
+            audioUrl = "",
+            title = "Empty Job",
+            description = "Test",
+            outputFileName = "test.mp4",
+            mimeType = "video/mp4",
+            sourceUrl = "https://example.com",
+        )
+
+        assertEquals(
+            "Only startForeground should be called; service must remain running because another job is active",
+            listOf("startForeground:empty-job-789"),
+            events,
+        )
+
+        assertFalse(MergeDownloadService.isJobActive("empty-job-789"))
+        assertTrue(MergeDownloadService.isJobActive("running-job-456"))
+    }
 }

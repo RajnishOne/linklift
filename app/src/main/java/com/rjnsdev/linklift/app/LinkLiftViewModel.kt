@@ -769,6 +769,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val downloadLoc = defaultDownloadLocation(effectiveSubfolder)
 
         val formatLabel = if (isMp3Requested) "MP3 audio" else format.label
+        val videoUrl = if (format.isAudioOnly) "" else format.mediaUrl
+        val audioUrl = audioFormat?.mediaUrl ?: (if (format.isAudioOnly) format.mediaUrl else "")
+
         MergeDownloadService.enqueue(
             context = appContext,
             jobId = jobId,
@@ -777,19 +780,31 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             description = formatLabel,
             outputFileName = outputFileName,
             mimeType = outputMime,
-            videoUrl = if (format.isAudioOnly) "" else format.mediaUrl,
+            videoUrl = videoUrl,
             videoExt = format.ext,
             videoHeaders = format.httpHeaders,
             videoSize = if (format.isAudioOnly) 0L else (format.fileSizeBytes?.let {
                 val audioSize = audioFormat?.fileSizeBytes ?: 0L
                 if (audioSize > 0L && it > audioSize) it - audioSize else it
             } ?: 0L),
-            audioUrl = audioFormat?.mediaUrl ?: (if (format.isAudioOnly) format.mediaUrl else ""),
+            audioUrl = audioUrl,
             audioExt = audioFormat?.ext ?: (if (format.isAudioOnly) format.ext else ""),
             audioHeaders = audioFormat?.httpHeaders ?: (if (format.isAudioOnly) format.httpHeaders else emptyMap()),
             audioSize = audioFormat?.fileSizeBytes ?: (if (format.isAudioOnly) (format.fileSizeBytes ?: 0L) else 0L),
             subfolder = effectiveSubfolder,
         )
+
+        if (videoUrl.isBlank() && audioUrl.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    currentScreen = AppScreen.Downloads,
+                    message = "Cannot download: No playable media stream found.",
+                    targetSubfolder = it.settings.downloadSubfolder,
+                    isFromShare = false,
+                )
+            }
+            return
+        }
 
         val actionLabel = if (isMp3Requested && !format.ext.equals("mp3", ignoreCase = true)) {
             "Converting"
@@ -1612,19 +1627,39 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                     preferAudioOnly = preferAudioOnly,
                 ) ?: primary.formats.firstOrNull()
 
-                // Remove the old failed download entry once resolved successfully
-                removeDownloadEntrySilently(download.id)
-
                 val useMergeService = chosen != null && shouldDownloadWithMergeService(
                     format = chosen,
                     sourceUrl = sourceUrl,
                     audioPref = audioPref,
                 )
                 if (useMergeService) {
+                    val format = chosen ?: return@launch
+                    if (!hasPlayableMediaUrls(format)) {
+                        val isYt = isYouTubeUrl(sourceUrl)
+                        val hasCookies = CookieHelper.hasValidCookies(appContext)
+                        if (isYt && !hasCookies) {
+                            promptYouTubeAuth(
+                                reason = "YouTube requires authentication to download this video.",
+                                retryDownload = download.copy(subfolder = resolvedSubfolder),
+                            )
+                            _uiState.update {
+                                it.copy(message = "Sign in to YouTube to retry this download.")
+                            }
+                        } else {
+                            _uiState.update {
+                                it.copy(message = "Cannot retry download: No playable media stream found.")
+                            }
+                        }
+                        return@launch
+                    }
+
+                    // Remove the old failed download entry once resolved successfully
+                    removeDownloadEntrySilently(download.id)
+
                     enqueueMergeJob(
                         sourceUrl = sourceUrl,
                         item = primary,
-                        format = chosen,
+                        format = format,
                         subfolder = resolvedSubfolder,
                     )
                     _uiState.update {
@@ -1634,11 +1669,34 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         )
                     }
                 } else {
+                    val resolved = resolveItemForDownload(primary, chosen?.formatId)
+                    val directUrl = resolved.resolvedUrl.ifBlank { chosen?.mediaUrl.orEmpty() }
+                    if (directUrl.isBlank()) {
+                        val isYt = isYouTubeUrl(sourceUrl)
+                        val hasCookies = CookieHelper.hasValidCookies(appContext)
+                        if (isYt && !hasCookies) {
+                            promptYouTubeAuth(
+                                reason = "YouTube requires authentication to download this video.",
+                                retryDownload = download.copy(subfolder = resolvedSubfolder),
+                            )
+                            _uiState.update {
+                                it.copy(message = "Sign in to YouTube to retry this download.")
+                            }
+                        } else {
+                            _uiState.update {
+                                it.copy(message = "Cannot retry download: No playable media stream found.")
+                            }
+                        }
+                        return@launch
+                    }
+
                     val manager = downloadManager ?: run {
                         _uiState.update { it.copy(message = "Download service is unavailable.") }
                         return@launch
                     }
-                    val resolved = resolveItemForDownload(primary, chosen?.formatId)
+                    // Remove the old failed download entry once resolved successfully
+                    removeDownloadEntrySilently(download.id)
+
                     enqueuePreviewItems(
                         manager = manager,
                         sourceUrl = sourceUrl,
@@ -3356,3 +3414,14 @@ private data class RemoteMetadata(
     val durationMs: Long? = null,
     val resolution: String? = null,
 )
+
+internal fun hasPlayableMediaUrls(format: MediaFormat?): Boolean {
+    if (format == null) return false
+    val videoUrl = if (format.isAudioOnly) "" else format.mediaUrl
+    val audioUrl = format.mergeAudio?.mediaUrl ?: (if (format.isAudioOnly) format.mediaUrl else "")
+    return if (format.requiresMerge) {
+        videoUrl.isNotBlank() && audioUrl.isNotBlank()
+    } else {
+        videoUrl.isNotBlank() || audioUrl.isNotBlank()
+    }
+}
