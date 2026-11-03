@@ -126,8 +126,15 @@ Builds:
     gradle:
       - yes
 
+  - versionName: '2.23'
+    versionCode: 33
+    commit: v2.23
+    subdir: app
+    gradle:
+      - yes
+
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: '2.22'
-CurrentVersionCode: 32
+CurrentVersion: '2.23'
+CurrentVersionCode: 33
 

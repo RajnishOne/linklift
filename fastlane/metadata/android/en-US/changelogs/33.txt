@@ -1,0 +1,5 @@
+- Adaptive background download polling: pauses continuous polling when idle to eliminate battery drain, with reactive instant wake-up when downloads start
+- Video playback quality: preserve natural presentation timestamps (PTS) for B-frames during muxing, eliminating stutter and frame judder in 1080p/60fps streams
+- Container format integrity: strictly enforce codec compatibility between video and audio containers (prevents pairing MP4 with Opus or WebM with AAC)
+- GoogleVideo downloads: robust chunked range downloading for YouTube streams when clen parameter is absent, preventing HTTP 403 errors and truncation
+- Stability enhancements and improved download progress reporting
