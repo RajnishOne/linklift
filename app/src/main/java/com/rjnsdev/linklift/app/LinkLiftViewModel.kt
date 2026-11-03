@@ -24,8 +24,10 @@ import com.rjnsdev.linklift.app.util.CookieHelper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -86,6 +88,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     val uiState: StateFlow<LinkLiftUiState> = _uiState.asStateFlow()
 
     private val screenBackStack = ArrayDeque<AppScreen>()
+    private val downloadPollWakeup = Channel<Unit>(Channel.CONFLATED)
 
     init {
         observePreferences()
@@ -103,11 +106,16 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 val hasActive = hasActiveDownloads()
                 val isDownloadsVisible = _uiState.value.currentScreen == AppScreen.Downloads
 
-                val pollDelay = calculatePollingIntervalMs(hasActive, isDownloadsVisible)
-                delay(pollDelay)
-
                 if (shouldPollDownloads(hasActive, isDownloadsVisible)) {
                     runCatching { refreshDownloads() }
+                }
+
+                val currentHasActive = hasActiveDownloads()
+                val currentDownloadsVisible = _uiState.value.currentScreen == AppScreen.Downloads
+                val pollDelay = calculatePollingIntervalMs(currentHasActive, currentDownloadsVisible)
+
+                withTimeoutOrNull(pollDelay) {
+                    downloadPollWakeup.receive()
                 }
             }
         }
@@ -130,6 +138,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         )
                         if (merged == current.downloads) current else current.copy(downloads = merged)
                     }
+                    downloadPollWakeup.trySend(Unit)
                 }
         }
     }
@@ -256,6 +265,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
         }
         _uiState.update { it.copy(currentScreen = screen, isFromShare = false) }
+        downloadPollWakeup.trySend(Unit)
         if (screen == AppScreen.Downloads) {
             viewModelScope.launch(Dispatchers.IO) {
                 runCatching { refreshDownloads() }
@@ -274,6 +284,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 isFromShare = false,
             )
         }
+        downloadPollWakeup.trySend(Unit)
     }
 
     fun backFromBatch() {
@@ -294,6 +305,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 isFromShare = false,
             )
         }
+        downloadPollWakeup.trySend(Unit)
     }
 
     fun clearMessage() {
@@ -1456,6 +1468,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             )
         }
         refreshDownloads()
+        downloadPollWakeup.trySend(Unit)
     }
 
     fun updateWifiOnly(enabled: Boolean) {
@@ -1585,6 +1598,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             removeDownloadEntrySilently(downloadId)
             refreshDownloads()
+            downloadPollWakeup.trySend(Unit)
             _uiState.update { it.copy(message = "Download cancelled.") }
         }
     }
