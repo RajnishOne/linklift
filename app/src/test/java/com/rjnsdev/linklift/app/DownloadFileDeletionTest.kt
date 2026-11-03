@@ -32,6 +32,60 @@ class DownloadFileDeletionTest {
     }
 
     @Test
+    fun testDeleteDownloadedPhysicalFileWithPlusAndSpacesInFilename() {
+        val tmpDir = System.getProperty("java.io.tmpdir") ?: "/tmp"
+        val parentDir = File(tmpDir)
+        val tempFile = File(parentDir, "linklift_test+del (1).mp4")
+        tempFile.writeText("sample video with plus and space")
+        assertTrue(tempFile.exists())
+
+        try {
+            val fileUri = "file://${tempFile.absolutePath}"
+            val result = deleteDownloadedPhysicalFile(null, fileUri)
+            assertTrue("deleteDownloadedPhysicalFile should delete file with '+' in path", result)
+            assertFalse("Physical file with '+' should no longer exist", tempFile.exists())
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
+        }
+    }
+
+    @Test
+    fun testDeleteDownloadedPhysicalFileWithPercentEncodedSpacesAndPlus() {
+        val tmpDir = System.getProperty("java.io.tmpdir") ?: "/tmp"
+        val parentDir = File(tmpDir)
+        val tempFile = File(parentDir, "linklift_percent+test file.mp4")
+        tempFile.writeText("sample video for percent encode test")
+        assertTrue(tempFile.exists())
+
+        try {
+            // Encode spaces as %20 while keeping + literal
+            val encodedUri = "file://" + tempFile.absolutePath.replace(" ", "%20")
+            val result = deleteDownloadedPhysicalFile(null, encodedUri)
+            assertTrue("deleteDownloadedPhysicalFile should delete file with %20 in URI", result)
+            assertFalse("Physical file should no longer exist", tempFile.exists())
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
+        }
+    }
+
+    @Test
+    fun testDeleteDownloadedPhysicalFileByDirectPathWithSpaces() {
+        val tmpDir = System.getProperty("java.io.tmpdir") ?: "/tmp"
+        val parentDir = File(tmpDir)
+        val tempFile = File(parentDir, "linklift direct path test.mp4")
+        tempFile.writeText("sample video direct path")
+        assertTrue(tempFile.exists())
+
+        try {
+            val result = deleteDownloadedPhysicalFile(null, tempFile.absolutePath)
+            assertTrue("deleteDownloadedPhysicalFile should delete file by direct path with spaces", result)
+            assertFalse("Physical file should no longer exist", tempFile.exists())
+        } finally {
+            if (tempFile.exists()) tempFile.delete()
+        }
+    }
+
+    @Test
     fun testDeleteDownloadedPhysicalFileWithInvalidOrNonExistentInputs() {
         assertFalse(deleteDownloadedPhysicalFile(null, null))
         assertFalse(deleteDownloadedPhysicalFile(null, ""))

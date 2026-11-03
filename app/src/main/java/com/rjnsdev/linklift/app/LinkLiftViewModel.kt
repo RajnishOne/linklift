@@ -1671,22 +1671,38 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         if (downloadIds.isEmpty()) return
         val currentDownloads = _uiState.value.downloads.associateBy { it.id }
         val (mergeIds, systemIds) = downloadIds.partition { isMergeJobDownloadId(it) }
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             if (systemIds.isNotEmpty()) {
                 val systemSet = systemIds.toSet()
                 if (deleteFiles) {
                     systemSet.forEach { id ->
                         val entry = currentDownloads[id]
-                        val uriToDelete = entry?.localUri ?: runCatching {
+                        val (rawLocalUri, mediaProviderUri) = runCatching {
                             val q = DownloadManager.Query().setFilterById(id)
                             downloadManager?.query(q)?.use { cursor ->
                                 if (cursor.moveToFirst()) {
                                     val col = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
-                                    if (col >= 0) cursor.getString(col) else null
+                                    val raw = if (col >= 0) cursor.getString(col) else null
+                                    val mediaCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        cursor.getColumnIndex(DownloadManager.COLUMN_MEDIAPROVIDER_URI)
+                                    } else -1
+                                    val media = if (mediaCol >= 0) cursor.getString(mediaCol) else null
+                                    Pair(raw, media)
                                 } else null
                             }
-                        }.getOrNull()
-                        deleteDownloadedPhysicalFile(appContext, uriToDelete)
+                        }.getOrNull() ?: Pair(null, null)
+
+                        var deleted = false
+                        if (!rawLocalUri.isNullOrBlank()) {
+                            deleted = deleteDownloadedPhysicalFile(appContext, rawLocalUri)
+                        }
+                        if (!mediaProviderUri.isNullOrBlank()) {
+                            val mediaDeleted = deleteDownloadedPhysicalFile(appContext, mediaProviderUri)
+                            deleted = deleted || mediaDeleted
+                        }
+                        if (!deleted && !entry?.localUri.isNullOrBlank()) {
+                            deleteDownloadedPhysicalFile(appContext, entry?.localUri)
+                        }
                         runCatching { downloadManager?.remove(id) }
                     }
                 }
@@ -1714,7 +1730,21 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         toRemove.values.forEach { jobRecord ->
                             val entry = currentDownloads[mergeJobToDownloadId(jobRecord.id)]
                             val uriToDelete = jobRecord.resultUri ?: entry?.localUri
-                            deleteDownloadedPhysicalFile(appContext, uriToDelete)
+                            var deleted = false
+                            if (!uriToDelete.isNullOrBlank()) {
+                                deleted = deleteDownloadedPhysicalFile(appContext, uriToDelete)
+                            }
+                            if (!deleted && jobRecord.state == MergeJobState.Completed) {
+                                val clean = MergeDownloadService.sanitizeSubfolder(jobRecord.subfolder)
+                                @Suppress("DEPRECATION")
+                                val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                val baseDir = File(dir, "LinkLift")
+                                val targetDir = if (clean.isBlank()) baseDir else File(baseDir, clean)
+                                val fallbackFile = File(targetDir, jobRecord.outputFileName)
+                                if (fallbackFile.exists()) {
+                                    deleteDownloadedPhysicalFile(appContext, fallbackFile.absolutePath)
+                                }
+                            }
                         }
                     }
                     toRemove.keys.forEach { MergeDownloadService.cancel(appContext, it) }
