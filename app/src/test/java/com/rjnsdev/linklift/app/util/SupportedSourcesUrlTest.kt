@@ -2,6 +2,7 @@ package com.rjnsdev.linklift.app.util
 
 import com.rjnsdev.linklift.app.MediaFormat
 import com.rjnsdev.linklift.app.MediaKind
+import com.rjnsdev.linklift.app.MergeDownloadService
 import com.rjnsdev.linklift.app.buildGoogleVideoChunkUrl
 import com.rjnsdev.linklift.app.extractAllUrls
 import com.rjnsdev.linklift.app.extractFirstUrl
@@ -239,6 +240,48 @@ class SupportedSourcesUrlTest {
         val chunkUrl2 = buildGoogleVideoChunkUrl(baseWithoutRange, 0L, 10485759L, 1)
         assertTrue(chunkUrl2.contains("range=0-10485759"))
         assertTrue(chunkUrl2.contains("rn=1"))
+    }
+
+    @Test
+    fun testResolveGoogleVideoExpectedSize() {
+        val urlWithClen = "https://rr1---sn.googlevideo.com/videoplayback?expire=123&clen=4567890"
+        assertEquals(
+            4567890L,
+            MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithClen, null),
+        )
+        // clen in query takes precedence over metadata
+        assertEquals(
+            4567890L,
+            MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithClen, 12345L),
+        )
+
+        // When clen is absent from URL query params, falls back to format metadata size
+        val urlWithoutClen = "https://rr1---sn.googlevideo.com/videoplayback?expire=123&nsig=abc"
+        assertEquals(
+            987654321L,
+            MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, 987654321L),
+        )
+
+        // When both clen and metadata are absent or non-positive, returns null (dynamically discovered via Content-Range)
+        assertNull(MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, null))
+        assertNull(MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, 0L))
+        assertNull(MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, -1L))
+    }
+
+    @Test
+    fun testParseContentRangeTotal() {
+        assertEquals(52428800L, MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/52428800"))
+        assertEquals(10485760L, MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/10485760"))
+        assertEquals(123456789L, MergeDownloadService.parseContentRangeTotal("bytes 1000-2000/123456789"))
+
+        // Unbounded or unknown total size returns null
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/*"))
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes */*"))
+        assertNull(MergeDownloadService.parseContentRangeTotal(null))
+        assertNull(MergeDownloadService.parseContentRangeTotal(""))
+        assertNull(MergeDownloadService.parseContentRangeTotal("invalid-header"))
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/0"))
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/-1"))
     }
 
     @Test
