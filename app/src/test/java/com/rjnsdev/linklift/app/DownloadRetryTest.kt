@@ -185,8 +185,40 @@ class DownloadRetryTest {
         )
         assertFalse("Progressive video with blank URL is not playable", hasPlayableMediaUrls(progressiveBlank))
 
+        val progressiveBlankWithAudio = progressiveBlank.copy(mergeAudio = videoAudioTrack)
+        assertFalse("Progressive video with blank mediaUrl must not be playable even if mergeAudio is attached", hasPlayableMediaUrls(progressiveBlankWithAudio))
+
         val progressiveValid = progressiveBlank.copy(mediaUrl = "https://example.com/prog.mp4")
         assertTrue("Progressive video with valid URL is playable", hasPlayableMediaUrls(progressiveValid))
+
+        val videoOnlyValid = MediaFormat(
+            formatId = "136",
+            label = "720p video only",
+            mediaUrl = "https://example.com/video720.mp4",
+            mimeType = "video/mp4",
+            kind = MediaKind.Video,
+            ext = "mp4",
+            height = 720,
+            width = 1280,
+            fps = 30,
+            abr = null,
+            tbr = 2000,
+            fileSizeBytes = 3000L,
+            fileSizeApprox = false,
+            isAudioOnly = false,
+            isProgressive = false,
+            isVideoOnly = true,
+            mergeAudio = null,
+        )
+        assertTrue("Video only format with valid mediaUrl is playable", hasPlayableMediaUrls(videoOnlyValid))
+
+        val videoOnlyBlank = videoOnlyValid.copy(mediaUrl = "")
+        assertFalse("Video only format with blank mediaUrl is not playable", hasPlayableMediaUrls(videoOnlyBlank))
+
+        val mergeFormatWhitespaceAudio = mergeFormatValid.copy(
+            mergeAudio = videoAudioTrack.copy(mediaUrl = "   "),
+        )
+        assertFalse("Merge video with whitespace audio URL is not playable", hasPlayableMediaUrls(mergeFormatWhitespaceAudio))
     }
 
     @Test

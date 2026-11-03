@@ -772,6 +772,36 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val videoUrl = if (format.isAudioOnly) "" else format.mediaUrl
         val audioUrl = audioFormat?.mediaUrl ?: (if (format.isAudioOnly) format.mediaUrl else "")
 
+        if (!hasPlayableMediaUrls(format)) {
+            MergeDownloadService.enqueue(
+                context = appContext,
+                jobId = jobId,
+                sourceUrl = sourceUrl,
+                title = item.title,
+                description = formatLabel,
+                outputFileName = outputFileName,
+                mimeType = outputMime,
+                videoUrl = "",
+                videoExt = format.ext,
+                videoHeaders = format.httpHeaders,
+                videoSize = 0L,
+                audioUrl = "",
+                audioExt = "",
+                audioHeaders = emptyMap(),
+                audioSize = 0L,
+                subfolder = effectiveSubfolder,
+            )
+            _uiState.update {
+                it.copy(
+                    currentScreen = AppScreen.Downloads,
+                    message = "Cannot download: No playable media stream found.",
+                    targetSubfolder = it.settings.downloadSubfolder,
+                    isFromShare = false,
+                )
+            }
+            return
+        }
+
         MergeDownloadService.enqueue(
             context = appContext,
             jobId = jobId,
@@ -793,18 +823,6 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             audioSize = audioFormat?.fileSizeBytes ?: (if (format.isAudioOnly) (format.fileSizeBytes ?: 0L) else 0L),
             subfolder = effectiveSubfolder,
         )
-
-        if (videoUrl.isBlank() && audioUrl.isBlank()) {
-            _uiState.update {
-                it.copy(
-                    currentScreen = AppScreen.Downloads,
-                    message = "Cannot download: No playable media stream found.",
-                    targetSubfolder = it.settings.downloadSubfolder,
-                    isFromShare = false,
-                )
-            }
-            return
-        }
 
         val actionLabel = if (isMp3Requested && !format.ext.equals("mp3", ignoreCase = true)) {
             "Converting"
@@ -3417,11 +3435,7 @@ private data class RemoteMetadata(
 
 internal fun hasPlayableMediaUrls(format: MediaFormat?): Boolean {
     if (format == null) return false
-    val videoUrl = if (format.isAudioOnly) "" else format.mediaUrl
-    val audioUrl = format.mergeAudio?.mediaUrl ?: (if (format.isAudioOnly) format.mediaUrl else "")
-    return if (format.requiresMerge) {
-        videoUrl.isNotBlank() && audioUrl.isNotBlank()
-    } else {
-        videoUrl.isNotBlank() || audioUrl.isNotBlank()
-    }
+    if (format.mediaUrl.isBlank()) return false
+    if (format.requiresMerge && format.mergeAudio?.mediaUrl.isNullOrBlank()) return false
+    return true
 }

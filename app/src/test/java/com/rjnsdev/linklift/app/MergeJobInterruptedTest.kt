@@ -1,5 +1,6 @@
 package com.rjnsdev.linklift.app
 
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,6 +12,12 @@ class MergeJobInterruptedTest {
 
     @Before
     fun setUp() {
+        MergeDownloadService.clearActiveJobsForTest()
+        MergeJobStore.resetForTest()
+    }
+
+    @After
+    fun tearDown() {
         MergeDownloadService.clearActiveJobsForTest()
         MergeJobStore.resetForTest()
     }
@@ -398,5 +405,80 @@ class MergeJobInterruptedTest {
 
         assertFalse(MergeDownloadService.isJobActive("empty-job-789"))
         assertTrue(MergeDownloadService.isJobActive("running-job-456"))
+    }
+
+    @Test
+    fun testEnqueueWithNullContextDoesNotLeakActiveJob() {
+        var startForegroundServiceCalled = false
+        val originalInvoker = MergeDownloadService.startForegroundServiceInvoker
+        try {
+            MergeDownloadService.startForegroundServiceInvoker = { _, _ ->
+                startForegroundServiceCalled = true
+            }
+
+            MergeDownloadService.enqueue(
+                context = null,
+                jobId = "test-null-context-job",
+                sourceUrl = "https://example.com/video",
+                title = "Valid Stream Test",
+                description = "720p",
+                outputFileName = "test.mp4",
+                mimeType = "video/mp4",
+                videoUrl = "https://example.com/video.mp4",
+                videoExt = "mp4",
+                videoHeaders = emptyMap(),
+                videoSize = 1000L,
+                audioUrl = "https://example.com/audio.m4a",
+                audioExt = "m4a",
+                audioHeaders = emptyMap(),
+                audioSize = 500L,
+            )
+
+            assertFalse("Service invoker must not be called with null context", startForegroundServiceCalled)
+            assertFalse("Job must not be marked active when service could not be started", MergeDownloadService.isJobActive("test-null-context-job"))
+        } finally {
+            MergeDownloadService.startForegroundServiceInvoker = originalInvoker
+        }
+    }
+
+    @Test
+    fun testProcessStartMergePreservesActiveJobSummaryNotification() {
+        val service = MergeDownloadService()
+        val events = mutableListOf<String>()
+
+        service.startForegroundDispatcher = { record ->
+            events.add("startForeground:${record.id}")
+        }
+        service.stopForegroundDispatcher = {
+            events.add("stopForeground")
+        }
+        service.stopSelfDispatcher = {
+            events.add("stopSelf")
+        }
+
+        // Add a genuinely active job to MergeJobStore
+        val activeJob = createJob("active-ongoing-job", MergeJobState.DownloadingVideo)
+        MergeJobStore.upsert(activeJob, null)
+        MergeDownloadService.markJobActiveForTest("active-ongoing-job")
+
+        service.processStartMerge(
+            jobId = "new-empty-job",
+            videoUrl = "",
+            audioUrl = "",
+            title = "Empty Job",
+            description = "Test",
+            outputFileName = "test.mp4",
+            mimeType = "video/mp4",
+            sourceUrl = "https://example.com",
+        )
+
+        // startForeground must use the notification of the still-active job, not the empty/failed job
+        assertEquals(
+            listOf("startForeground:active-ongoing-job"),
+            events,
+        )
+
+        assertFalse(MergeDownloadService.isJobActive("new-empty-job"))
+        assertTrue(MergeDownloadService.isJobActive("active-ongoing-job"))
     }
 }

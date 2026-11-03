@@ -155,8 +155,8 @@ class MergeDownloadService : Service() {
                 MergeJobStore.upsert(failedRecord, context)
                 return
             }
-            runningJobIds.add(jobId)
             val nonNullContext = context ?: return
+            runningJobIds.add(jobId)
             val intent = Intent(nonNullContext, MergeDownloadService::class.java).apply {
                 action = ACTION_START_MERGE
                 putExtra(EXTRA_JOB_ID, jobId)
@@ -322,7 +322,8 @@ class MergeDownloadService : Service() {
                 updatedAt = System.currentTimeMillis(),
                 mimeType = "video/mp4",
             )
-            startForegroundIfNeeded(fallback)
+            val activeRecord = MergeJobStore.snapshot().values.firstOrNull { it.state in ACTIVE_STATES }
+            startForegroundIfNeeded(activeRecord ?: fallback)
             if (!hasActiveWork()) {
                 stopForegroundCompat()
                 stopSelfCompat()
@@ -350,7 +351,8 @@ class MergeDownloadService : Service() {
                 subfolder = subfolder,
             )
             MergeJobStore.upsert(failedRecord, runCatching { applicationContext }.getOrNull())
-            startForegroundIfNeeded(failedRecord)
+            val activeRecord = MergeJobStore.snapshot().values.firstOrNull { it.state in ACTIVE_STATES }
+            startForegroundIfNeeded(activeRecord ?: failedRecord)
             if (!hasActiveWork()) {
                 stopForegroundCompat()
                 stopSelfCompat()
