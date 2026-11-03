@@ -269,6 +269,22 @@ class SupportedSourcesUrlTest {
     }
 
     @Test
+    fun testParseContentRangeTotal() {
+        assertEquals(52428800L, MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/52428800"))
+        assertEquals(10485760L, MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/10485760"))
+        assertEquals(123456789L, MergeDownloadService.parseContentRangeTotal("bytes 1000-2000/123456789"))
+
+        // Unbounded or unknown total size returns null
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/*"))
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes */*"))
+        assertNull(MergeDownloadService.parseContentRangeTotal(null))
+        assertNull(MergeDownloadService.parseContentRangeTotal(""))
+        assertNull(MergeDownloadService.parseContentRangeTotal("invalid-header"))
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/0"))
+        assertNull(MergeDownloadService.parseContentRangeTotal("bytes 0-10485759/-1"))
+    }
+
+    @Test
     fun testIsYouTubeAuthRequired() {
         // Non-YouTube URLs never require YouTube auth
         assertFalse(isYouTubeAuthRequired(isYt = false, hasCookies = false, errMsg = "403 Forbidden"))

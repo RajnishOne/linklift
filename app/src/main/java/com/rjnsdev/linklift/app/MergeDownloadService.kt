@@ -206,6 +206,12 @@ class MergeDownloadService : Service() {
             val clen = url.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()?.takeIf { it > 0L }
             return clen ?: metadataSize?.takeIf { it > 0L }
         }
+
+        internal fun parseContentRangeTotal(contentRange: String?): Long? {
+            if (contentRange.isNullOrBlank()) return null
+            val totalPart = contentRange.substringAfter('/', "").trim()
+            return totalPart.toLongOrNull()?.takeIf { it > 0L }
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -780,7 +786,7 @@ class MergeDownloadService : Service() {
                     }
 
                     if (totalBytes == null || totalBytes!! <= 0L) {
-                        val resolvedTotal = contentLengthTotal(resp, bytesSoFar, resp.body?.contentLength() ?: -1L)
+                        val resolvedTotal = parseContentRangeTotal(resp.header("Content-Range"))
                         if (resolvedTotal != null && resolvedTotal > 0L) {
                             totalBytes = resolvedTotal
                         }
@@ -822,11 +828,7 @@ class MergeDownloadService : Service() {
         resumeFrom: Long,
         bodyLength: Long,
     ): Long? {
-        val contentRange = response.header("Content-Range")
-        if (!contentRange.isNullOrBlank()) {
-            val totalPart = contentRange.substringAfter('/', "").trim()
-            totalPart.toLongOrNull()?.takeIf { it > 0L }?.let { return it }
-        }
+        parseContentRangeTotal(response.header("Content-Range"))?.let { return it }
         if (bodyLength > 0L) {
             return if (resumeFrom > 0L) resumeFrom + bodyLength else bodyLength
         }
