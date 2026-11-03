@@ -98,11 +98,23 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
+            runCatching { refreshDownloads() }
             while (isActive) {
-                runCatching { refreshDownloads() }
-                delay(2_000)
+                val hasActive = hasActiveDownloads()
+                val isDownloadsVisible = _uiState.value.currentScreen == AppScreen.Downloads
+
+                val pollDelay = calculatePollingIntervalMs(hasActive, isDownloadsVisible)
+                delay(pollDelay)
+
+                if (shouldPollDownloads(hasActive, isDownloadsVisible)) {
+                    runCatching { refreshDownloads() }
+                }
             }
         }
+    }
+
+    private fun hasActiveDownloads(): Boolean {
+        return hasActiveDownloads(_uiState.value.downloads, MergeJobStore.snapshot())
     }
 
     private fun observeMergeJobs() {
@@ -244,6 +256,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
         }
         _uiState.update { it.copy(currentScreen = screen, isFromShare = false) }
+        if (screen == AppScreen.Downloads) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { refreshDownloads() }
+            }
+        }
     }
 
     fun backFromPreview() {
@@ -3485,6 +3502,33 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val pending = pendingAuthRetryDownload ?: return
         pendingAuthRetryDownload = null
         retryDownload(pending)
+    }
+
+    companion object {
+        internal fun hasActiveDownloads(
+            downloads: List<DownloadEntry>,
+            mergeJobs: Map<String, MergeJobRecord>,
+        ): Boolean {
+            val hasActiveSystem = downloads.any {
+                it.state == DownloadState.Downloading || it.state == DownloadState.Queued
+            }
+            if (hasActiveSystem) return true
+            return mergeJobs.values.any { MergeJobStore.isJobActiveState(it.state) }
+        }
+
+        internal fun calculatePollingIntervalMs(
+            hasActiveDownloads: Boolean,
+            isDownloadsScreenVisible: Boolean,
+        ): Long = when {
+            hasActiveDownloads -> 2_000L
+            isDownloadsScreenVisible -> 8_000L
+            else -> 30_000L
+        }
+
+        internal fun shouldPollDownloads(
+            hasActiveDownloads: Boolean,
+            isDownloadsScreenVisible: Boolean,
+        ): Boolean = hasActiveDownloads || isDownloadsScreenVisible
     }
 }
 
