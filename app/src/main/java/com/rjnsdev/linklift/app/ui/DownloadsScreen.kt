@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Image
@@ -89,7 +90,8 @@ import com.rjnsdev.linklift.app.ui.theme.LinkLiftYouTubeRedBright
 @Composable
 internal fun DownloadsScreen(
     downloads: List<DownloadEntry>,
-    onRemoveTracked: (Set<Long>) -> Unit,
+    onRemoveTracked: (Set<Long>) -> Unit = {},
+    onDeleteDownloads: (Set<Long>, Boolean) -> Unit = { ids, _ -> onRemoveTracked(ids) },
     onRegenerateTracked: (String?) -> Unit,
     onCancelDownload: (Long) -> Unit,
     onRetryDownload: (DownloadEntry) -> Unit = {},
@@ -102,6 +104,7 @@ internal fun DownloadsScreen(
     var missingMediaDialogDownload by remember { mutableStateOf<DownloadEntry?>(null) }
     var selectionMode by rememberSaveable { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
+    var showDeleteConfirmationDialog by rememberSaveable { mutableStateOf(false) }
     val filtered = remember(downloads, query) {
         if (query.isBlank()) downloads else downloads.filter {
             it.title.contains(query, ignoreCase = true) || it.description.contains(query, ignoreCase = true)
@@ -114,6 +117,7 @@ internal fun DownloadsScreen(
         selectedIds = selectedIds.intersect(validIds)
         if (selectionMode && validIds.isEmpty()) {
             selectionMode = false
+            showDeleteConfirmationDialog = false
         }
     }
 
@@ -131,6 +135,19 @@ internal fun DownloadsScreen(
             onReanalyze = {
                 missingMediaDialogDownload = null
                 onRegenerateTracked(download.sourceUrl)
+            },
+        )
+    }
+
+    if (showDeleteConfirmationDialog && selectedIds.isNotEmpty()) {
+        DeleteDownloadsConfirmationDialog(
+            count = selectedIds.size,
+            onDismiss = { showDeleteConfirmationDialog = false },
+            onConfirm = { deleteFilesFromStorage ->
+                onDeleteDownloads(selectedIds, deleteFilesFromStorage)
+                showDeleteConfirmationDialog = false
+                selectionMode = false
+                selectedIds = emptySet()
             },
         )
     }
@@ -171,9 +188,9 @@ internal fun DownloadsScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             text = if (selectionMode) {
-                                "${selectedIds.size} selected. Removing tracked items only clears them from this list."
+                                "${selectedIds.size} item${if (selectedIds.size == 1) "" else "s"} selected."
                             } else {
-                                "Manage the items tracked in this tab without deleting the downloaded files."
+                                "Manage tracked downloads or delete files to free up device storage."
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = LinkLiftTextSecondary,
@@ -205,12 +222,23 @@ internal fun DownloadsScreen(
                                 }
                                 OutlinedButton(
                                     onClick = {
-                                        onRemoveTracked(selectedIds)
-                                        selectionMode = false
-                                        selectedIds = emptySet()
+                                        showDeleteConfirmationDialog = true
                                     },
                                     enabled = selectedIds.isNotEmpty(),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = if (selectedIds.isNotEmpty()) LinkLiftError else LinkLiftTextMuted,
+                                    ),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (selectedIds.isNotEmpty()) LinkLiftError.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.1f),
+                                    ),
                                 ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Delete,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text("Delete selected")
                                 }
                             } else {
@@ -901,4 +929,121 @@ private fun DownloadedMediaDeletedDialog(
         } else null,
     )
 }
+
+@Composable
+internal fun DeleteDownloadsConfirmationDialog(
+    count: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (deleteFilesFromStorage: Boolean) -> Unit,
+) {
+    var deleteFilesFromStorage by rememberSaveable { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(24.dp),
+        containerColor = LinkLiftSurface,
+        icon = {
+            Surface(
+                shape = CircleShape,
+                color = LinkLiftError.copy(alpha = 0.16f),
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Delete,
+                    contentDescription = null,
+                    tint = LinkLiftError,
+                    modifier = Modifier
+                        .padding(12.dp)
+                        .size(28.dp),
+                )
+            }
+        },
+        title = {
+            Text(
+                text = if (count == 1) "Delete 1 download?" else "Delete $count downloads?",
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = if (count == 1) {
+                        "Are you sure you want to remove this download?"
+                    } else {
+                        "Are you sure you want to remove these $count downloads?"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = LinkLiftTextSecondary,
+                )
+                Surface(
+                    onClick = { deleteFilesFromStorage = !deleteFilesFromStorage },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.05f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (deleteFilesFromStorage) LinkLiftError.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.1f),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Checkbox(
+                            checked = deleteFilesFromStorage,
+                            onCheckedChange = { deleteFilesFromStorage = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = LinkLiftError,
+                                checkmarkColor = Color.White,
+                                uncheckedColor = LinkLiftTextMuted,
+                            ),
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "Delete files from device",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                            )
+                            Text(
+                                text = if (deleteFilesFromStorage) {
+                                    "Permanently removes files from storage to free up space."
+                                } else {
+                                    "Files will remain in Download/LinkLift."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = LinkLiftTextMuted,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(deleteFilesFromStorage) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (deleteFilesFromStorage) LinkLiftError else Color.White.copy(alpha = 0.14f),
+                    contentColor = Color.White,
+                ),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(if (deleteFilesFromStorage) "Delete" else "Remove from list")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("Cancel", color = LinkLiftTextSecondary)
+            }
+        },
+    )
+}
+
 

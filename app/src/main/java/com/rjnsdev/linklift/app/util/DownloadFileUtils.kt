@@ -4,7 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.net.Uri
+import android.provider.MediaStore
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -181,3 +183,86 @@ internal fun extractSubfolderFromUriString(uriString: String?): String? {
         }
     }.getOrNull()
 }
+
+internal fun deleteDownloadedPhysicalFile(context: Context?, localUri: String?): Boolean {
+    if (localUri.isNullOrBlank()) return false
+    var deleted = false
+    runCatching {
+        val trimmed = localUri.trim()
+        when {
+            trimmed.startsWith("/") -> {
+                val file = File(trimmed)
+                if (file.exists()) {
+                    deleted = file.delete()
+                    if (deleted && context != null) {
+                        runCatching {
+                            MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null, null)
+                        }
+                    }
+                }
+            }
+            trimmed.startsWith("file://", ignoreCase = true) -> {
+                val rawPath = trimmed.substring(7)
+                val path = runCatching { java.net.URLDecoder.decode(rawPath, "UTF-8") }.getOrDefault(rawPath)
+                val file = File(path)
+                if (file.exists()) {
+                    deleted = file.delete()
+                    if (deleted && context != null) {
+                        runCatching {
+                            MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null, null)
+                        }
+                    }
+                }
+            }
+            trimmed.startsWith("content://", ignoreCase = true) -> {
+                if (context != null) {
+                    val uri = Uri.parse(trimmed)
+                    val dataPath = runCatching {
+                        context.contentResolver.query(
+                            uri,
+                            arrayOf(MediaStore.MediaColumns.DATA),
+                            null,
+                            null,
+                            null,
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) {
+                                val col = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                                if (col >= 0) cursor.getString(col) else null
+                            } else null
+                        }
+                    }.getOrNull()
+
+                    val rowsDeleted = runCatching {
+                        context.contentResolver.delete(uri, null, null)
+                    }.getOrDefault(0)
+
+                    if (rowsDeleted > 0) {
+                        deleted = true
+                    }
+
+                    if (!dataPath.isNullOrBlank()) {
+                        val file = File(dataPath)
+                        if (file.exists()) {
+                            val fileDeleted = runCatching { file.delete() }.getOrDefault(false)
+                            if (fileDeleted) {
+                                deleted = true
+                                runCatching {
+                                    MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null, null)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else -> {
+                // Fallback attempt as direct path
+                val file = File(trimmed)
+                if (file.exists()) {
+                    deleted = file.delete()
+                }
+            }
+        }
+    }
+    return deleted
+}
+
