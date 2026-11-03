@@ -201,6 +201,27 @@ class MergeDownloadService : Service() {
                 }
             }
         }
+
+        internal fun calculateSamplePts(
+            rawPts: Long,
+            isAudio: Boolean,
+            lastAudioPts: Long = -1L,
+            firstPtsOffset: Long = 0L,
+        ): Long {
+            val normalizedPts = if (firstPtsOffset < 0L) {
+                maxOf(rawPts - firstPtsOffset, 0L)
+            } else {
+                maxOf(rawPts, 0L)
+            }
+            return if (isAudio) {
+                if (normalizedPts <= lastAudioPts) lastAudioPts + 1L else normalizedPts
+            } else {
+                // Video frames (especially H.264 / H.265 with B-frames) arrive in decode order (DTS).
+                // Their presentation timestamps (PTS) are naturally non-monotonic.
+                // We must preserve the original container presentation timestamps to prevent frame judder and stutter.
+                normalizedPts
+            }
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -923,8 +944,9 @@ class MergeDownloadService : Service() {
 
         var videoDone = false
         var audioDone = false
-        var lastVideoPts = -1L
         var lastAudioPts = -1L
+        var firstVideoPts: Long? = null
+        var firstAudioPts: Long? = null
 
         while (!videoDone || !audioDone) {
             val videoPts = if (!videoDone) videoExtractor.sampleTime else -1L
@@ -963,17 +985,20 @@ class MergeDownloadService : Service() {
             }
 
             val rawPts = extractor.sampleTime
-            val lastPts = if (writeVideo) lastVideoPts else lastAudioPts
-            // Android MediaMuxer requires non-negative and strictly monotonic PTS per track.
-            val pts = if (rawPts <= lastPts) {
-                lastPts + 1L
+            val pts = if (writeVideo) {
+                val offset = firstVideoPts ?: run {
+                    firstVideoPts = rawPts
+                    rawPts
+                }
+                calculateSamplePts(rawPts, isAudio = false, lastAudioPts = -1L, firstPtsOffset = offset)
             } else {
-                maxOf(rawPts, 0L)
-            }
-            if (writeVideo) {
-                lastVideoPts = pts
-            } else {
-                lastAudioPts = pts
+                val offset = firstAudioPts ?: run {
+                    firstAudioPts = rawPts
+                    rawPts
+                }
+                val samplePts = calculateSamplePts(rawPts, isAudio = true, lastAudioPts = lastAudioPts, firstPtsOffset = offset)
+                lastAudioPts = samplePts
+                samplePts
             }
 
             info.offset = 0

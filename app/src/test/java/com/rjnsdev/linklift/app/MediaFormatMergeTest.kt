@@ -187,5 +187,36 @@ class MediaFormatMergeTest {
         )
         assertEquals("custom_clip.mp4", fallbackFileName)
     }
+
+    @Test
+    fun testBFramePresentationTimestampsPreserved() {
+        // Decode order (DTS): I(0), P(66000), B(33000), B(49500), P(132000), B(99000)
+        val decodeOrderRawPts = listOf(0L, 66_000L, 33_000L, 49_500L, 132_000L, 99_000L)
+        val calculatedVideoPts = decodeOrderRawPts.map { raw ->
+            MergeDownloadService.calculateSamplePts(raw, isAudio = false, firstPtsOffset = 0L)
+        }
+
+        // B-frame PTS must be preserved exactly in decode order for container presentation
+        assertEquals(0L, calculatedVideoPts[0])
+        assertEquals(66_000L, calculatedVideoPts[1])
+        assertEquals(33_000L, calculatedVideoPts[2])
+        assertEquals(49_500L, calculatedVideoPts[3])
+        assertEquals(132_000L, calculatedVideoPts[4])
+        assertEquals(99_000L, calculatedVideoPts[5])
+
+        // Verify audio enforces strictly monotonic timestamps
+        val audioRawPts = listOf(0L, 23_000L, 23_000L, 20_000L, 46_000L)
+        var lastAudioPts = -1L
+        val calculatedAudioPts = audioRawPts.map { raw ->
+            val pts = MergeDownloadService.calculateSamplePts(raw, isAudio = true, lastAudioPts = lastAudioPts)
+            lastAudioPts = pts
+            pts
+        }
+        assertEquals(0L, calculatedAudioPts[0])
+        assertEquals(23_000L, calculatedAudioPts[1])
+        assertEquals(23_001L, calculatedAudioPts[2])
+        assertEquals(23_002L, calculatedAudioPts[3])
+        assertEquals(46_000L, calculatedAudioPts[4])
+    }
 }
 
