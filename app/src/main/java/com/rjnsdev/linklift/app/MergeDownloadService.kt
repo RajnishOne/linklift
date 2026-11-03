@@ -201,6 +201,11 @@ class MergeDownloadService : Service() {
                 }
             }
         }
+
+        internal fun resolveGoogleVideoExpectedSize(url: String, metadataSize: Long?): Long? {
+            val clen = url.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()?.takeIf { it > 0L }
+            return clen ?: metadataSize?.takeIf { it > 0L }
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -400,6 +405,8 @@ class MergeDownloadService : Service() {
                                 audioUrl = audioUrl,
                                 audioExt = audioExt,
                                 audioHeaders = audioHeaders,
+                                videoSize = videoSize,
+                                audioSize = audioSize,
                                 subfolder = subfolder,
                             )
                         }
@@ -451,6 +458,8 @@ class MergeDownloadService : Service() {
         audioUrl: String,
         audioExt: String,
         audioHeaders: Map<String, String>,
+        videoSize: Long = 0L,
+        audioSize: Long = 0L,
         subfolder: String? = null,
     ) {
         val tempDir = File(applicationContext.cacheDir, "merge").apply { mkdirs() }
@@ -476,6 +485,7 @@ class MergeDownloadService : Service() {
                             url = videoUrl,
                             headers = videoHeaders,
                             target = videoTemp,
+                            expectedSize = videoSize.takeIf { it > 0L },
                         ) { bytes, total ->
                             updateState(jobId) {
                                 it.copy(
@@ -494,6 +504,7 @@ class MergeDownloadService : Service() {
                             url = audioUrl,
                             headers = audioHeaders,
                             target = audioTemp,
+                            expectedSize = audioSize.takeIf { it > 0L },
                         ) { bytes, total ->
                             updateState(jobId) { record ->
                                 val nextState = if (record.state == MergeJobState.DownloadingVideo) {
@@ -595,6 +606,7 @@ class MergeDownloadService : Service() {
         url: String,
         headers: Map<String, String>,
         target: File,
+        expectedSize: Long? = null,
         onProgress: (Long, Long?) -> Unit,
     ) {
         var attempt = 0
@@ -602,7 +614,7 @@ class MergeDownloadService : Service() {
         while (attempt < DOWNLOAD_MAX_ATTEMPTS) {
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
             try {
-                downloadFileAttempt(url, headers, target, onProgress)
+                downloadFileAttempt(url, headers, target, expectedSize, onProgress)
                 return
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -622,6 +634,7 @@ class MergeDownloadService : Service() {
         url: String,
         headers: Map<String, String>,
         target: File,
+        expectedSize: Long? = null,
         onProgress: (Long, Long?) -> Unit,
     ) {
         val resumeFrom = target.takeIf { it.exists() }?.length()?.takeIf { it > 0L } ?: 0L
@@ -632,9 +645,9 @@ class MergeDownloadService : Service() {
             .firstOrNull { it.key.equals("User-Agent", ignoreCase = true) }?.value
         val effectiveUserAgent = extractionUserAgent ?: linkLiftUserAgent
 
-        val clen = url.toHttpUrlOrNull()?.queryParameter("clen")?.toLongOrNull()
-        if (isGoogleVideo && clen != null && clen > 0L) {
-            downloadGoogleVideoChunked(url, headers, target, effectiveUserAgent, clen, onProgress)
+        if (isGoogleVideo) {
+            val totalBytes = resolveGoogleVideoExpectedSize(url, expectedSize)
+            downloadGoogleVideoChunked(url, headers, target, effectiveUserAgent, totalBytes, onProgress)
             return
         }
 
@@ -710,12 +723,13 @@ class MergeDownloadService : Service() {
         headers: Map<String, String>,
         target: File,
         effectiveUserAgent: String,
-        totalBytes: Long,
+        initialTotalBytes: Long?,
         onProgress: (Long, Long?) -> Unit,
     ) {
         val chunkSize = 10 * 1024 * 1024L // 10MB chunks
+        var totalBytes = initialTotalBytes
         var bytesSoFar = target.takeIf { it.exists() }?.length() ?: 0L
-        if (bytesSoFar >= totalBytes) {
+        if (totalBytes != null && totalBytes > 0L && bytesSoFar >= totalBytes) {
             onProgress(totalBytes, totalBytes)
             return
         }
@@ -736,9 +750,10 @@ class MergeDownloadService : Service() {
 
         var requestNumber = (bytesSoFar / chunkSize).toInt()
         FileOutputStream(target, true).use { output ->
-            while (bytesSoFar < totalBytes) {
+            while (totalBytes == null || bytesSoFar < totalBytes!!) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                val chunkEnd = minOf(bytesSoFar + chunkSize - 1L, totalBytes - 1L)
+                val chunkEnd = totalBytes?.let { minOf(bytesSoFar + chunkSize - 1L, it - 1L) }
+                    ?: (bytesSoFar + chunkSize - 1L)
                 requestNumber++
                 val chunkUrl = buildGoogleVideoChunkUrl(url, bytesSoFar, chunkEnd, requestNumber)
                 val reqBuilder = Request.Builder()
@@ -749,6 +764,10 @@ class MergeDownloadService : Service() {
 
                 val response = okHttpClient.newCall(reqBuilder.get().build()).execute()
                 response.use { resp ->
+                    if (resp.code == 416 && bytesSoFar > 0L) {
+                        onProgress(bytesSoFar, bytesSoFar)
+                        return
+                    }
                     if (!resp.isSuccessful) {
                         val isYt = url.contains("googlevideo.com")
                         val retryNote = if (isRetryableHttpCode(resp.code)) " (retryable)" else ""
@@ -759,21 +778,38 @@ class MergeDownloadService : Service() {
                         }
                         throw IOException("Download chunk failed: $detail for $chunkUrl")
                     }
+
+                    if (totalBytes == null || totalBytes!! <= 0L) {
+                        val resolvedTotal = contentLengthTotal(resp, bytesSoFar, resp.body?.contentLength() ?: -1L)
+                        if (resolvedTotal != null && resolvedTotal > 0L) {
+                            totalBytes = resolvedTotal
+                        }
+                    }
+
                     val body = resp.body ?: throw IOException("Empty response body for $chunkUrl")
                     val buffer = ByteArray(64 * 1024)
                     var read: Int
+                    var chunkBytesRead = 0L
                     var lastReported = 0L
                     body.byteStream().use { input ->
                         while (input.read(buffer).also { read = it } > 0) {
                             kotlinx.coroutines.currentCoroutineContext().ensureActive()
                             output.write(buffer, 0, read)
                             bytesSoFar += read
+                            chunkBytesRead += read
                             val now = System.currentTimeMillis()
                             if (now - lastReported >= 250L) {
                                 lastReported = now
                                 onProgress(bytesSoFar, totalBytes)
                             }
                         }
+                    }
+                    val expectedChunkBytes = chunkEnd - (bytesSoFar - chunkBytesRead) + 1L
+                    if (totalBytes == null && chunkBytesRead < expectedChunkBytes) {
+                        totalBytes = bytesSoFar
+                    }
+                    if (chunkBytesRead == 0L) {
+                        break
                     }
                 }
                 onProgress(bytesSoFar, totalBytes)

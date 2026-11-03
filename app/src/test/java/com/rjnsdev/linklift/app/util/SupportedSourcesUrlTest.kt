@@ -2,6 +2,7 @@ package com.rjnsdev.linklift.app.util
 
 import com.rjnsdev.linklift.app.MediaFormat
 import com.rjnsdev.linklift.app.MediaKind
+import com.rjnsdev.linklift.app.MergeDownloadService
 import com.rjnsdev.linklift.app.buildGoogleVideoChunkUrl
 import com.rjnsdev.linklift.app.extractAllUrls
 import com.rjnsdev.linklift.app.extractFirstUrl
@@ -239,6 +240,32 @@ class SupportedSourcesUrlTest {
         val chunkUrl2 = buildGoogleVideoChunkUrl(baseWithoutRange, 0L, 10485759L, 1)
         assertTrue(chunkUrl2.contains("range=0-10485759"))
         assertTrue(chunkUrl2.contains("rn=1"))
+    }
+
+    @Test
+    fun testResolveGoogleVideoExpectedSize() {
+        val urlWithClen = "https://rr1---sn.googlevideo.com/videoplayback?expire=123&clen=4567890"
+        assertEquals(
+            4567890L,
+            MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithClen, null),
+        )
+        // clen in query takes precedence over metadata
+        assertEquals(
+            4567890L,
+            MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithClen, 12345L),
+        )
+
+        // When clen is absent from URL query params, falls back to format metadata size
+        val urlWithoutClen = "https://rr1---sn.googlevideo.com/videoplayback?expire=123&nsig=abc"
+        assertEquals(
+            987654321L,
+            MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, 987654321L),
+        )
+
+        // When both clen and metadata are absent or non-positive, returns null (dynamically discovered via Content-Range)
+        assertNull(MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, null))
+        assertNull(MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, 0L))
+        assertNull(MergeDownloadService.resolveGoogleVideoExpectedSize(urlWithoutClen, -1L))
     }
 
     @Test
