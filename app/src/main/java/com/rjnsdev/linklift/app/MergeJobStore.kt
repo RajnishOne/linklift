@@ -14,8 +14,11 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 enum class MergeJobState {
@@ -82,6 +85,7 @@ object MergeJobStore {
     private const val PERSIST_INTERVAL_MS = 8_000L
 
     private val mutex = Any()
+    private val persistMutex = Mutex()
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Always holds the latest in-memory job state (for service snapshot / notifications). */
@@ -128,15 +132,39 @@ object MergeJobStore {
         return reconciled to changed
     }
 
+    fun cleanupOrphanedJobFiles(baseDir: File?, orphanedJobIds: Collection<String>) {
+        if (baseDir == null || orphanedJobIds.isEmpty()) return
+        runCatching {
+            val tempDir = File(baseDir, "merge")
+            if (tempDir.exists() && tempDir.isDirectory) {
+                orphanedJobIds.forEach { jobId ->
+                    tempDir.listFiles { file -> file.name.startsWith(jobId) }?.forEach { file ->
+                        runCatching { file.delete() }
+                    }
+                }
+            }
+        }
+    }
+
+    fun cleanupOrphanedJobFiles(context: Context, orphanedJobIds: Collection<String>) {
+        cleanupOrphanedJobFiles(context.applicationContext?.cacheDir, orphanedJobIds)
+    }
+
     fun reconcileActiveJobs(context: Context): Boolean {
         val current = snapshot()
         if (current.isEmpty()) return false
         val (reconciled, changed) = reconcileJobs(current)
         if (changed) {
-            latestById.clear()
-            latestById.putAll(reconciled)
-            _jobs.value = reconciled
-            persist(context)
+            val changedEntries = reconciled.filter { (id, job) ->
+                val prev = current[id]
+                prev == null || prev.state != job.state || prev.errorMessage != job.errorMessage
+            }
+            if (changedEntries.isNotEmpty()) {
+                latestById.putAll(changedEntries)
+                _jobs.update { cur -> cur + changedEntries }
+                cleanupOrphanedJobFiles(context, changedEntries.keys)
+                persist(context)
+            }
         }
         return changed
     }
@@ -156,9 +184,16 @@ object MergeJobStore {
                         val parsed = parse(raw)
                         if (parsed.isNotEmpty()) {
                             val (reconciled, changed) = reconcileJobs(parsed)
-                            latestById.clear()
-                            latestById.putAll(reconciled)
-                            _jobs.value = reconciled
+                            reconciled.forEach { (id, job) ->
+                                latestById.putIfAbsent(id, job)
+                            }
+                            _jobs.update { current ->
+                                reconciled + current
+                            }
+                            val orphanedIds = reconciled.filter { (id, job) ->
+                                parsed[id]?.state != job.state && job.state == MergeJobState.Failed
+                            }.keys
+                            cleanupOrphanedJobFiles(context, orphanedIds)
                             if (changed) {
                                 persist(context)
                             }
@@ -233,13 +268,15 @@ object MergeJobStore {
         (record.progress * 100f).toInt().coerceIn(0, 100)
 
     private fun persist(context: Context) {
-        val payload = serialize(snapshot())
         ioScope.launch {
-            context.applicationContext.mergeJobDataStore.edit { prefs ->
-                if (payload.isBlank()) {
-                    prefs.remove(MERGE_JOBS_KEY)
-                } else {
-                    prefs[MERGE_JOBS_KEY] = payload
+            persistMutex.withLock {
+                val payload = serialize(snapshot())
+                context.applicationContext.mergeJobDataStore.edit { prefs ->
+                    if (payload.isBlank()) {
+                        prefs.remove(MERGE_JOBS_KEY)
+                    } else {
+                        prefs[MERGE_JOBS_KEY] = payload
+                    }
                 }
             }
         }

@@ -176,4 +176,80 @@ class MergeJobInterruptedTest {
         assertFalse(changed)
         assertTrue(reconciled.isEmpty())
     }
+
+    @Test
+    fun testReconciliationIdempotency() {
+        val activeJob = createJob("idempotent-job", MergeJobState.DownloadingVideo)
+        val initialMap = mapOf("idempotent-job" to activeJob)
+
+        // First reconciliation: transitions to Failed
+        val (firstRun, changed1) = MergeJobStore.reconcileJobs(
+            jobs = initialMap,
+            isWorkerActive = { false },
+        )
+        assertTrue(changed1)
+        assertEquals(MergeJobState.Failed, firstRun["idempotent-job"]?.state)
+        val firstUpdatedAt = firstRun["idempotent-job"]!!.updatedAt
+
+        // Second reconciliation on already reconciled output: no-op, changed = false
+        val (secondRun, changed2) = MergeJobStore.reconcileJobs(
+            jobs = firstRun,
+            isWorkerActive = { false },
+        )
+        assertFalse("Second reconciliation must not report changes", changed2)
+        assertEquals(MergeJobState.Failed, secondRun["idempotent-job"]?.state)
+        assertEquals(firstUpdatedAt, secondRun["idempotent-job"]?.updatedAt)
+        assertEquals(MergeJobStore.ERROR_DOWNLOAD_INTERRUPTED, secondRun["idempotent-job"]?.errorMessage)
+    }
+
+    @Test
+    fun testConcurrentJobsPreservedDuringIncrementalReconciliation() {
+        // Simulate a running job and an orphaned job
+        val orphaned = createJob("orphaned-job", MergeJobState.DownloadingVideo)
+        val active = createJob("active-job", MergeJobState.DownloadingVideo)
+        val jobsMap = mapOf("orphaned-job" to orphaned, "active-job" to active)
+
+        val (reconciled, changed) = MergeJobStore.reconcileJobs(
+            jobs = jobsMap,
+            isWorkerActive = { it == "active-job" },
+        )
+
+        assertTrue(changed)
+        // Orphaned transitioned to Failed
+        assertEquals(MergeJobState.Failed, reconciled["orphaned-job"]?.state)
+        assertEquals(MergeJobStore.ERROR_DOWNLOAD_INTERRUPTED, reconciled["orphaned-job"]?.errorMessage)
+
+        // Active remains active and is never dropped
+        assertEquals(MergeJobState.DownloadingVideo, reconciled["active-job"]?.state)
+        assertNull(reconciled["active-job"]?.errorMessage)
+
+        // Simulate concurrent addition of a third job
+        val newJob = createJob("new-job", MergeJobState.Queued)
+        val combined = reconciled + ("new-job" to newJob)
+        assertEquals(3, combined.size)
+        assertEquals(MergeJobState.Queued, combined["new-job"]?.state)
+    }
+
+    @Test
+    fun testCleanupOrphanedJobFiles() {
+        val tempDir = java.nio.file.Files.createTempDirectory("linklift_test_cleanup").toFile()
+        try {
+            val mergeDir = java.io.File(tempDir, "merge").apply { mkdirs() }
+            val orphanedVideo = java.io.File(mergeDir, "job-orphan_video.mp4").apply { writeText("video data") }
+            val orphanedAudio = java.io.File(mergeDir, "job-orphan_audio.m4a").apply { writeText("audio data") }
+            val activeVideo = java.io.File(mergeDir, "job-active_video.mp4").apply { writeText("active data") }
+
+            assertTrue(orphanedVideo.exists())
+            assertTrue(orphanedAudio.exists())
+            assertTrue(activeVideo.exists())
+
+            MergeJobStore.cleanupOrphanedJobFiles(tempDir, listOf("job-orphan"))
+
+            assertFalse("Orphaned video chunk must be deleted", orphanedVideo.exists())
+            assertFalse("Orphaned audio chunk must be deleted", orphanedAudio.exists())
+            assertTrue("Active job chunk must be preserved", activeVideo.exists())
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

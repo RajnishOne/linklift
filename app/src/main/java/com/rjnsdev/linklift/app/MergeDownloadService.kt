@@ -152,7 +152,6 @@ class MergeDownloadService : Service() {
         }
 
         fun cancel(context: Context, jobId: String) {
-            runningJobIds.remove(jobId)
             val intent = Intent(context, MergeDownloadService::class.java).apply {
                 action = ACTION_CANCEL_MERGE
                 putExtra(EXTRA_JOB_ID, jobId)
@@ -213,7 +212,8 @@ class MergeDownloadService : Service() {
     }
 
     override fun onDestroy() {
-        runningJobIds.clear()
+        val jobsToClean = synchronized(activeJobs) { activeJobs.keys.toList() }
+        jobsToClean.forEach { runningJobIds.remove(it) }
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -223,7 +223,10 @@ class MergeDownloadService : Service() {
         runningJobIds.add(jobId)
         val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL).orEmpty()
         val audioUrl = intent.getStringExtra(EXTRA_AUDIO_URL).orEmpty()
-        if (videoUrl.isBlank() && audioUrl.isBlank()) return
+        if (videoUrl.isBlank() && audioUrl.isBlank()) {
+            runningJobIds.remove(jobId)
+            return
+        }
 
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "Merge download" }
         val description = intent.getStringExtra(EXTRA_DESCRIPTION).orEmpty()

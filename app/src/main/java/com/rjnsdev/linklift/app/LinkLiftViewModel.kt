@@ -96,12 +96,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             _uiState.update {
                 it.copy(message = "Download service is unavailable on this device right now.")
             }
-        } else {
-            viewModelScope.launch(Dispatchers.IO) {
-                while (isActive) {
-                    runCatching { refreshDownloads() }
-                    delay(2_000)
-                }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                runCatching { refreshDownloads() }
+                delay(2_000)
             }
         }
     }
