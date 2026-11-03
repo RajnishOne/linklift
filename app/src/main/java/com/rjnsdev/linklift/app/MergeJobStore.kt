@@ -14,8 +14,11 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 enum class MergeJobState {
@@ -77,10 +80,13 @@ private val Context.mergeJobDataStore by androidx.datastore.preferences.preferen
 private val MERGE_JOBS_KEY = stringPreferencesKey("merge_jobs_v1")
 
 object MergeJobStore {
+    const val ERROR_DOWNLOAD_INTERRUPTED = "Download interrupted when app closed"
+    const val ERROR_EMPTY_MEDIA_URL = "No valid media stream URL found"
     private const val UI_EMIT_INTERVAL_MS = 1_000L
     private const val PERSIST_INTERVAL_MS = 8_000L
 
     private val mutex = Any()
+    private val persistMutex = Mutex()
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Always holds the latest in-memory job state (for service snapshot / notifications). */
@@ -93,6 +99,76 @@ object MergeJobStore {
 
     @Volatile
     private var loaded = false
+
+    var activeJobChecker: (String) -> Boolean = { MergeDownloadService.isJobActive(it) }
+
+    fun isJobActiveState(state: MergeJobState): Boolean = when (state) {
+        MergeJobState.Queued,
+        MergeJobState.DownloadingVideo,
+        MergeJobState.DownloadingAudio,
+        MergeJobState.Muxing,
+        MergeJobState.ConvertingAudio -> true
+        MergeJobState.Completed,
+        MergeJobState.Failed,
+        MergeJobState.Cancelled -> false
+    }
+
+    fun reconcileJobs(
+        jobs: Map<String, MergeJobRecord>,
+        isWorkerActive: (String) -> Boolean = activeJobChecker,
+    ): Pair<Map<String, MergeJobRecord>, Boolean> {
+        var changed = false
+        val reconciled = jobs.mapValues { (_, job) ->
+            if (isJobActiveState(job.state) && !isWorkerActive(job.id)) {
+                changed = true
+                job.copy(
+                    state = MergeJobState.Failed,
+                    errorMessage = ERROR_DOWNLOAD_INTERRUPTED,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            } else {
+                job
+            }
+        }
+        return reconciled to changed
+    }
+
+    fun cleanupOrphanedJobFiles(baseDir: File?, orphanedJobIds: Collection<String>) {
+        if (baseDir == null || orphanedJobIds.isEmpty()) return
+        runCatching {
+            val tempDir = File(baseDir, "merge")
+            if (tempDir.exists() && tempDir.isDirectory) {
+                orphanedJobIds.forEach { jobId ->
+                    tempDir.listFiles { file -> file.name.startsWith(jobId) }?.forEach { file ->
+                        runCatching { file.delete() }
+                    }
+                }
+            }
+        }
+    }
+
+    fun cleanupOrphanedJobFiles(context: Context, orphanedJobIds: Collection<String>) {
+        cleanupOrphanedJobFiles(context.applicationContext?.cacheDir, orphanedJobIds)
+    }
+
+    fun reconcileActiveJobs(context: Context): Boolean {
+        val current = snapshot()
+        if (current.isEmpty()) return false
+        val (reconciled, changed) = reconcileJobs(current)
+        if (changed) {
+            val changedEntries = reconciled.filter { (id, job) ->
+                val prev = current[id]
+                prev == null || prev.state != job.state || prev.errorMessage != job.errorMessage
+            }
+            if (changedEntries.isNotEmpty()) {
+                latestById.putAll(changedEntries)
+                _jobs.update { cur -> cur + changedEntries }
+                cleanupOrphanedJobFiles(context, changedEntries.keys)
+                persist(context)
+            }
+        }
+        return changed
+    }
 
     fun ensureLoaded(context: Context) {
         if (loaded) return
@@ -108,9 +184,20 @@ object MergeJobStore {
                     if (!raw.isNullOrBlank()) {
                         val parsed = parse(raw)
                         if (parsed.isNotEmpty()) {
-                            latestById.clear()
-                            latestById.putAll(parsed)
-                            _jobs.value = parsed
+                            val (reconciled, changed) = reconcileJobs(parsed)
+                            reconciled.forEach { (id, job) ->
+                                latestById.putIfAbsent(id, job)
+                            }
+                            _jobs.update { current ->
+                                reconciled + current
+                            }
+                            val orphanedIds = reconciled.filter { (id, job) ->
+                                parsed[id]?.state != job.state && job.state == MergeJobState.Failed
+                            }.keys
+                            cleanupOrphanedJobFiles(context, orphanedIds)
+                            if (changed) {
+                                persist(context)
+                            }
                         }
                     }
                 }
@@ -118,13 +205,19 @@ object MergeJobStore {
         }
     }
 
-    fun upsert(context: Context, record: MergeJobRecord) {
+    fun upsert(record: MergeJobRecord, context: Context? = null) {
         val sanitized = record.copy(updatedAt = System.currentTimeMillis())
         latestById[sanitized.id] = sanitized
         _jobs.update { current -> current + (sanitized.id to sanitized) }
         lastUiEmitAt[sanitized.id] = System.currentTimeMillis()
         lastPersistAt[sanitized.id] = System.currentTimeMillis()
-        persist(context)
+        if (context != null) {
+            persist(context)
+        }
+    }
+
+    fun upsert(context: Context, record: MergeJobRecord) {
+        upsert(record, context)
     }
 
     fun update(context: Context, id: String, transform: (MergeJobRecord) -> MergeJobRecord) {
@@ -182,13 +275,18 @@ object MergeJobStore {
         (record.progress * 100f).toInt().coerceIn(0, 100)
 
     private fun persist(context: Context) {
-        val payload = serialize(snapshot())
         ioScope.launch {
-            context.applicationContext.mergeJobDataStore.edit { prefs ->
-                if (payload.isBlank()) {
-                    prefs.remove(MERGE_JOBS_KEY)
-                } else {
-                    prefs[MERGE_JOBS_KEY] = payload
+            persistMutex.withLock {
+                runCatching {
+                    val appContext = runCatching { context.applicationContext }.getOrNull() ?: context
+                    val payload = serialize(snapshot())
+                    appContext.mergeJobDataStore.edit { prefs ->
+                        if (payload.isBlank()) {
+                            prefs.remove(MERGE_JOBS_KEY)
+                        } else {
+                            prefs[MERGE_JOBS_KEY] = payload
+                        }
+                    }
                 }
             }
         }
@@ -219,7 +317,7 @@ object MergeJobStore {
         return array.toString()
     }
 
-    private fun parse(raw: String): Map<String, MergeJobRecord> {
+    internal fun parse(raw: String): Map<String, MergeJobRecord> {
         return runCatching {
             val array = JSONArray(raw)
             buildMap {
@@ -228,16 +326,6 @@ object MergeJobStore {
                     val id = obj.optString("id").takeIf { it.isNotBlank() } ?: continue
                     val state = runCatching { MergeJobState.valueOf(obj.optString("state")) }
                         .getOrDefault(MergeJobState.Failed)
-                    val healed = when (state) {
-                        // A job that was actively downloading/muxing when the process died is
-                        // no longer reachable — surface it as Failed so the user can re-queue.
-                        MergeJobState.Queued,
-                        MergeJobState.DownloadingVideo,
-                        MergeJobState.DownloadingAudio,
-                        MergeJobState.Muxing,
-                        MergeJobState.ConvertingAudio -> MergeJobState.Failed
-                        else -> state
-                    }
                     put(
                         id,
                         MergeJobRecord(
@@ -246,17 +334,13 @@ object MergeJobStore {
                             description = obj.optString("description"),
                             sourceUrl = obj.optString("sourceUrl"),
                             outputFileName = obj.optString("outputFileName").ifBlank { "$id.mp4" },
-                            state = healed,
+                            state = state,
                             videoBytes = obj.optLong("videoBytes", 0L),
                             videoTotal = obj.optLong("videoTotal", 0L),
                             audioBytes = obj.optLong("audioBytes", 0L),
                             audioTotal = obj.optLong("audioTotal", 0L),
                             resultUri = obj.optString("resultUri").takeIf { it.isNotBlank() && it != "null" },
-                            errorMessage = when (healed) {
-                                MergeJobState.Failed -> obj.optString("errorMessage").takeIf { it.isNotBlank() && it != "null" }
-                                    ?: "Interrupted by app restart. Retry the download."
-                                else -> obj.optString("errorMessage").takeIf { it.isNotBlank() && it != "null" }
-                            },
+                            errorMessage = obj.optString("errorMessage").takeIf { it.isNotBlank() && it != "null" },
                             updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
                             mimeType = obj.optString("mimeType").ifBlank { "video/mp4" },
                             subfolder = obj.optString("subfolder").takeIf { it.isNotBlank() && it != "null" },
@@ -265,6 +349,15 @@ object MergeJobStore {
                 }
             }
         }.getOrDefault(emptyMap())
+    }
+
+    internal fun resetForTest() {
+        latestById.clear()
+        lastUiEmitAt.clear()
+        lastPersistAt.clear()
+        _jobs.value = emptyMap()
+        loaded = false
+        activeJobChecker = { MergeDownloadService.isJobActive(it) }
     }
 }
 
