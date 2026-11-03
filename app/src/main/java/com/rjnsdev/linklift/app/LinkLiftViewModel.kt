@@ -3072,6 +3072,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
     }
 
     private suspend fun refreshDownloads() {
+        MergeJobStore.reconcileActiveJobs(appContext)
         val manager = downloadManager ?: run {
             _uiState.update { current ->
                 current.copy(

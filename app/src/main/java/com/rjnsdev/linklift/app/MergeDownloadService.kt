@@ -54,6 +54,7 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import kotlin.math.min
@@ -96,6 +97,20 @@ class MergeDownloadService : Service() {
                 .take(80)
         }
 
+        private val runningJobIds = ConcurrentHashMap.newKeySet<String>()
+
+        fun isJobActive(jobId: String): Boolean = runningJobIds.contains(jobId)
+
+        fun getActiveJobIds(): Set<String> = runningJobIds.toSet()
+
+        internal fun markJobActiveForTest(jobId: String) {
+            runningJobIds.add(jobId)
+        }
+
+        internal fun clearActiveJobsForTest() {
+            runningJobIds.clear()
+        }
+
         fun enqueue(
             context: Context,
             jobId: String,
@@ -114,6 +129,7 @@ class MergeDownloadService : Service() {
             audioSize: Long,
             subfolder: String? = null,
         ) {
+            runningJobIds.add(jobId)
             val intent = Intent(context, MergeDownloadService::class.java).apply {
                 action = ACTION_START_MERGE
                 putExtra(EXTRA_JOB_ID, jobId)
@@ -136,6 +152,7 @@ class MergeDownloadService : Service() {
         }
 
         fun cancel(context: Context, jobId: String) {
+            runningJobIds.remove(jobId)
             val intent = Intent(context, MergeDownloadService::class.java).apply {
                 action = ACTION_CANCEL_MERGE
                 putExtra(EXTRA_JOB_ID, jobId)
@@ -196,12 +213,14 @@ class MergeDownloadService : Service() {
     }
 
     override fun onDestroy() {
+        runningJobIds.clear()
         serviceScope.cancel()
         super.onDestroy()
     }
 
     private fun handleStart(intent: Intent) {
         val jobId = intent.getStringExtra(EXTRA_JOB_ID) ?: return
+        runningJobIds.add(jobId)
         val videoUrl = intent.getStringExtra(EXTRA_VIDEO_URL).orEmpty()
         val audioUrl = intent.getStringExtra(EXTRA_AUDIO_URL).orEmpty()
         if (videoUrl.isBlank() && audioUrl.isBlank()) return
@@ -243,24 +262,27 @@ class MergeDownloadService : Service() {
             jobMutex.withLock {
                 if (activeJobs[jobId]?.isActive == true) return@withLock
                 val job = serviceScope.launch {
-                    jobSemaphore.withPermit {
-                        runMergeJob(
-                            jobId = jobId,
-                            title = title,
-                            description = description,
-                            outputFileName = outputFileName,
-                            mimeType = mimeType,
-                            sourceUrl = sourceUrl,
-                            videoUrl = videoUrl,
-                            videoExt = videoExt,
-                            videoHeaders = videoHeaders,
-                            audioUrl = audioUrl,
-                            audioExt = audioExt,
-                            audioHeaders = audioHeaders,
-                            subfolder = subfolder,
-                        )
+                    try {
+                        jobSemaphore.withPermit {
+                            runMergeJob(
+                                jobId = jobId,
+                                title = title,
+                                description = description,
+                                outputFileName = outputFileName,
+                                mimeType = mimeType,
+                                sourceUrl = sourceUrl,
+                                videoUrl = videoUrl,
+                                videoExt = videoExt,
+                                videoHeaders = videoHeaders,
+                                audioUrl = audioUrl,
+                                audioExt = audioExt,
+                                audioHeaders = audioHeaders,
+                                subfolder = subfolder,
+                            )
+                        }
+                    } finally {
+                        onJobFinished(jobId)
                     }
-                    onJobFinished(jobId)
                 }
                 activeJobs[jobId] = job
             }
@@ -283,6 +305,7 @@ class MergeDownloadService : Service() {
     }
 
     private suspend fun onJobFinished(jobId: String) {
+        runningJobIds.remove(jobId)
         jobMutex.withLock {
             activeJobs.remove(jobId)
             if (activeJobs.isEmpty()) {
