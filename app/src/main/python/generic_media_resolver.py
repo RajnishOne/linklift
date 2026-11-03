@@ -322,6 +322,11 @@ def _pick_audio_pair(video_fmt, audio_pool):
         ] if video_ext in _MP4_FAMILY_EXTS else [
             a for a in audio_pool
             if (a.get("ext") or "").lower() in preferred_exts
+            and not str(a.get("acodec") or "").lower().startswith("mp4a")
+            and not str(a.get("acodec") or "").lower().startswith("aac")
+        ] if video_ext in _WEBM_FAMILY_EXTS else [
+            a for a in audio_pool
+            if (a.get("ext") or "").lower() in preferred_exts
         ]
         if narrowed:
             pool = narrowed

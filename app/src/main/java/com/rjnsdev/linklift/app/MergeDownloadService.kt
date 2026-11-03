@@ -861,6 +861,10 @@ class MergeDownloadService : Service() {
             if (containerFormat == MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4 && audioMime.contains("opus", ignoreCase = true)) {
                 throw IllegalArgumentException("Cannot mux Opus audio ($audioMime) into an MP4 container.")
             }
+            if (containerFormat == MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM &&
+                (audioMime.contains("mp4a", ignoreCase = true) || audioMime.contains("aac", ignoreCase = true))) {
+                throw IllegalArgumentException("Cannot mux AAC audio ($audioMime) into a WebM container.")
+            }
 
             videoExtractor.selectTrack(videoTrack.index)
             audioExtractor.selectTrack(audioTrack.index)

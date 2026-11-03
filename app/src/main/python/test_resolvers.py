@@ -139,6 +139,14 @@ class TestGenericMediaResolver(unittest.TestCase):
         self.assertEqual(pair_webm["ext"], "opus")
         # WebM video must not be paired with M4A/AAC audio
         self.assertIsNone(_pick_audio_pair(video_webm, [audio_m4a]))
+        audio_webm_aac = {
+            "ext": "webm",
+            "url": "http://example.com/audio.webm",
+            "abr": 128,
+            "vcodec": "none",
+            "acodec": "mp4a.40.2",
+        }
+        self.assertIsNone(_pick_audio_pair(video_webm, [audio_webm_aac]))
 
         # GoogleVideo (YouTube): MP4 video must pair with itag 140 (m4a), WebM video must pair with itag 251 (opus)
         audio_yt_140 = {
