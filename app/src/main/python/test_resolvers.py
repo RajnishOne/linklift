@@ -122,10 +122,23 @@ class TestGenericMediaResolver(unittest.TestCase):
         pair = _pick_audio_pair(video_mp4, [audio_m4a, audio_opus])
         self.assertEqual(pair["ext"], "m4a")
 
+        # MP4 video must NEVER be paired with Opus/WebM audio (prevents MediaMuxer IllegalArgumentException)
+        self.assertIsNone(_pick_audio_pair(video_mp4, [audio_opus]))
+        audio_m4a_opus = {
+            "ext": "m4a",
+            "url": "http://example.com/audio.m4a",
+            "abr": 128,
+            "vcodec": "none",
+            "acodec": "opus",
+        }
+        self.assertIsNone(_pick_audio_pair(video_mp4, [audio_m4a_opus]))
+
         # WebM video should prefer WebM audio family (opus/webm)
         video_webm = {"ext": "webm"}
         pair_webm = _pick_audio_pair(video_webm, [audio_m4a, audio_opus])
         self.assertEqual(pair_webm["ext"], "opus")
+        # WebM video must not be paired with M4A/AAC audio
+        self.assertIsNone(_pick_audio_pair(video_webm, [audio_m4a]))
 
         # GoogleVideo (YouTube): MP4 video must pair with itag 140 (m4a), WebM video must pair with itag 251 (opus)
         audio_yt_140 = {

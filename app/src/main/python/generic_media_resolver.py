@@ -314,9 +314,21 @@ def _pick_audio_pair(video_fmt, audio_pool):
 
     pool = audio_pool
     if preferred_exts:
-        narrowed = [a for a in audio_pool if (a.get("ext") or "").lower() in preferred_exts]
+        narrowed = [
+            a for a in audio_pool
+            if (a.get("ext") or "").lower() in preferred_exts
+            and not str(a.get("acodec") or "").lower().startswith("opus")
+            and not str(a.get("acodec") or "").lower().startswith("vorbis")
+        ] if video_ext in _MP4_FAMILY_EXTS else [
+            a for a in audio_pool
+            if (a.get("ext") or "").lower() in preferred_exts
+        ]
         if narrowed:
             pool = narrowed
+        elif video_ext in _MP4_FAMILY_EXTS or video_ext in _WEBM_FAMILY_EXTS:
+            # Strictly do not cross-pair incompatible containers:
+            # Android MediaMuxer cannot mux Opus audio into MP4 containers (throws IllegalArgumentException).
+            return None
 
     # For YouTube / GoogleVideo, prefer itag 140 for MP4 or itag 251 for WebM
     v_url = (video_fmt.get("media_url") or video_fmt.get("url") or "").lower()
