@@ -56,11 +56,14 @@ Create a new changelog file named after the new **`versionCode`** (not `versionN
 
 ---
 
-## Step 3: Update Fastlane Descriptions (Optional / When Needed)
+## Step 3: Update Fastlane Descriptions & Screenshots (Optional / When Needed)
 
-If there are updates to store branding or keywords, review:
+If there are updates to store branding, keywords, or preview graphics, review:
 - [`fastlane/metadata/android/en-US/short_description.txt`](file:///Volumes/SSD/StudioProjects/LinkLift/fastlane/metadata/android/en-US/short_description.txt) (Max 80 characters)
 - [`fastlane/metadata/android/en-US/full_description.txt`](file:///Volumes/SSD/StudioProjects/LinkLift/fastlane/metadata/android/en-US/full_description.txt) (Max 4000 characters)
+- [`fastlane/metadata/android/en-US/images/icon.png`](file:///Volumes/SSD/StudioProjects/LinkLift/fastlane/metadata/android/en-US/images/icon.png) (App icon)
+- [`fastlane/metadata/android/en-US/images/featureGraphic.png`](file:///Volumes/SSD/StudioProjects/LinkLift/fastlane/metadata/android/en-US/images/featureGraphic.png) (Promotional banner)
+- [`fastlane/metadata/android/en-US/images/phoneScreenshots/`](file:///Volumes/SSD/StudioProjects/LinkLift/fastlane/metadata/android/en-US/images/phoneScreenshots/) (Phone screenshots, e.g., `1.png` to `7.png` ordered sequentially)
 
 ---
 
