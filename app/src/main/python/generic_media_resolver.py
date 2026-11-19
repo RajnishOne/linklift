@@ -527,6 +527,48 @@ def _fallback_format_from_entry(entry):
     }
 
 
+def _extract_best_subtitle(entry):
+    """Find the best subtitle URL for the entry (preferring manual over auto, and srt/vtt).
+    Returns a dict with {"url": ..., "ext": ..., "lang": ...} or None.
+    """
+    subtitles = entry.get("subtitles") or {}
+    auto_captions = entry.get("automatic_captions") or {}
+
+    def _find_in_dict(source_dict):
+        if not source_dict or not isinstance(source_dict, dict):
+            return None
+        # Prioritize English, then other languages
+        sorted_langs = sorted(
+            source_dict.keys(),
+            key=lambda l: 0 if str(l).lower().startswith("en") else 1
+        )
+        for lang in sorted_langs:
+            track_list = source_dict.get(lang) or []
+            if not isinstance(track_list, list):
+                continue
+            # First look for srt, then vtt
+            for target_ext in ("srt", "vtt"):
+                for track in track_list:
+                    if isinstance(track, dict):
+                        ext = (track.get("ext") or "").lower()
+                        url = track.get("url")
+                        if url and ext == target_ext:
+                            return {"url": url, "ext": ext, "lang": str(lang)}
+            # If not srt/vtt, pick any track with a valid url
+            for track in track_list:
+                if isinstance(track, dict) and track.get("url"):
+                    ext = (track.get("ext") or "vtt").lower()
+                    return {"url": track["url"], "ext": ext, "lang": str(lang)}
+        return None
+
+    # First check manual subtitles (creator-provided lyrics / subs)
+    found = _find_in_dict(subtitles)
+    if found:
+        return found
+    # Fallback to automatic captions
+    return _find_in_dict(auto_captions)
+
+
 def _entry_payload(entry, fallback_title=None, fallback_description=None):
     formats = _entry_formats(entry)
     if not formats:
@@ -562,6 +604,8 @@ def _entry_payload(entry, fallback_title=None, fallback_description=None):
     if isinstance(duration, (int, float)) and duration > 0:
         duration_ms = int(duration * 1000)
 
+    subtitle = _extract_best_subtitle(entry)
+
     return {
         "kind": primary["kind"],
         "media_url": primary["media_url"],
@@ -572,6 +616,7 @@ def _entry_payload(entry, fallback_title=None, fallback_description=None):
         "duration_ms": duration_ms,
         "formats": formats,
         "thumbnail": entry.get("thumbnail"),
+        "subtitle": subtitle,
     }
 
 
@@ -756,7 +801,7 @@ def _flat_entry_payload(entry):
     }
 
 
-def resolve_playlist(url, cookie_file_path=None, max_items=200):
+def resolve_playlist(url, cookie_file_path=None, max_items=1000):
     """Expand a playlist, channel, or user feed URL into a flat list of entries.
 
     Uses yt-dlp's flat extraction so we only fetch metadata for each entry without
@@ -774,7 +819,7 @@ def resolve_playlist(url, cookie_file_path=None, max_items=200):
     try:
         max_items_int = max(1, int(max_items))
     except (TypeError, ValueError):
-        max_items_int = 200
+        max_items_int = 1000
 
     is_youtube = ("youtube" in url.lower()) or ("youtu.be" in url.lower())
     has_valid_cookies = bool(

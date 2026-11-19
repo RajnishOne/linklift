@@ -767,6 +767,7 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         item: PreviewMediaItem,
         format: MediaFormat,
         subfolder: String? = null,
+        isPriority: Boolean = false,
     ) {
         val audioFormat = format.mergeAudio // might be null
         val isMp3Requested = format.isAudioOnly && (
@@ -819,6 +820,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 audioHeaders = emptyMap(),
                 audioSize = 0L,
                 subfolder = effectiveSubfolder,
+                isPriority = isPriority,
+                conflictBehavior = uiState.value.settings.fileConflictBehavior.storageKey,
+                subtitleUrl = item.subtitleUrl ?: format.subtitleUrl,
+                subtitleExt = item.subtitleExt ?: format.subtitleExt,
+                downloadSubtitles = uiState.value.settings.downloadSubtitles,
             )
             _uiState.update {
                 it.copy(
@@ -851,6 +857,11 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             audioHeaders = audioFormat?.httpHeaders ?: (if (format.isAudioOnly) format.httpHeaders else emptyMap()),
             audioSize = audioFormat?.fileSizeBytes ?: (if (format.isAudioOnly) (format.fileSizeBytes ?: 0L) else 0L),
             subfolder = effectiveSubfolder,
+            isPriority = isPriority,
+            conflictBehavior = uiState.value.settings.fileConflictBehavior.storageKey,
+            subtitleUrl = item.subtitleUrl ?: format.subtitleUrl,
+            subtitleExt = item.subtitleExt ?: format.subtitleExt,
+            downloadSubtitles = uiState.value.settings.downloadSubtitles,
         )
 
         val actionLabel = if (isMp3Requested && !format.ext.equals("mp3", ignoreCase = true)) {
@@ -1395,6 +1406,17 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             subfolder ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
         )
         items.forEachIndexed { index, item ->
+            val conflictPolicy = uiState.value.settings.fileConflictBehavior
+            val existingUri = findExistingMediaFile(appContext, item.fileName, cleanSubfolder)
+            if (existingUri != null) {
+                if (conflictPolicy == FileConflictBehavior.Skip) {
+                    showToast("Skipped ${item.title} (already exists)")
+                    return@forEachIndexed
+                } else if (conflictPolicy == FileConflictBehavior.Overwrite) {
+                    deleteDownloadedPhysicalFile(appContext, existingUri.toString())
+                }
+            }
+
             val destinationSubpath = if (cleanSubfolder.isBlank()) {
                 "LinkLift/${item.fileName}"
             } else {
@@ -1519,6 +1541,22 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun updateFileConflictBehavior(behavior: FileConflictBehavior) {
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                prefs[PreferenceKeys.fileConflictBehavior] = behavior.storageKey
+            }
+        }
+    }
+
+    fun updateDownloadSubtitles(enabled: Boolean) {
+        viewModelScope.launch {
+            appContext.linkLiftDataStore.edit { prefs ->
+                prefs[PreferenceKeys.downloadSubtitles] = enabled
+            }
+        }
+    }
+
     fun setTargetSubfolder(subfolder: String) {
         _uiState.update { it.copy(targetSubfolder = MergeDownloadService.sanitizeSubfolder(subfolder)) }
     }
@@ -1624,151 +1662,201 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            val resolvedSubfolder = download.subfolder?.takeIf { it.isNotBlank() }
-                ?: (if (isMergeJobDownloadId(download.id)) {
-                    MergeJobStore.snapshot().values.firstOrNull { mergeJobToDownloadId(it.id) == download.id }?.subfolder
-                } else null)?.takeIf { it.isNotBlank() }
-                ?: MergeJobStore.snapshot().values.firstOrNull { it.sourceUrl == sourceUrl }?.subfolder?.takeIf { it.isNotBlank() }
-                ?: readTrackedSubfolders()[download.id]?.takeIf { it.isNotBlank() }
-                ?: extractSubfolderFromUriString(download.localUri)
-                ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() }
-                ?: uiState.value.settings.downloadSubfolder
-            val downloadLoc = defaultDownloadLocation(resolvedSubfolder)
+            retryDownloadInternal(download)
+        }
+    }
 
-            try {
-                val previewResult = runCatching {
-                    if (isInstagramHost(sourceUrl)) {
-                        inspectInstagramLink(url = sourceUrl)
-                    } else {
-                        resolveWithPythonOrFallback(sourceUrl)
-                    }
-                }.getOrElse { error ->
-                    val errorMsg = error.message.orEmpty()
+    fun retryAllFailedDownloads() {
+        val failed = _uiState.value.downloads.filter {
+            it.state == DownloadState.Failed && !it.sourceUrl.isNullOrBlank()
+        }
+        if (failed.isEmpty()) {
+            _uiState.update { it.copy(message = "No failed downloads to retry.") }
+            return
+        }
+        val failedIds = failed.map { it.id }.toSet()
+        _uiState.update {
+            it.copy(
+                retryingDownloadIds = it.retryingDownloadIds + failedIds,
+                message = "Retrying ${failed.size} failed download${if (failed.size == 1) "" else "s"}...",
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            failed.forEach { download ->
+                retryDownloadInternal(download)
+            }
+        }
+    }
+
+    fun retrySelectedDownloads(selectedIds: Set<Long>) {
+        val failed = _uiState.value.downloads.filter {
+            it.id in selectedIds && it.state == DownloadState.Failed && !it.sourceUrl.isNullOrBlank()
+        }
+        if (failed.isEmpty()) {
+            _uiState.update { it.copy(message = "No failed downloads selected.") }
+            return
+        }
+        val failedIds = failed.map { it.id }.toSet()
+        _uiState.update {
+            it.copy(
+                retryingDownloadIds = it.retryingDownloadIds + failedIds,
+                message = "Retrying ${failed.size} failed download${if (failed.size == 1) "" else "s"}...",
+            )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            failed.forEach { download ->
+                retryDownloadInternal(download)
+            }
+        }
+    }
+
+    private suspend fun retryDownloadInternal(download: DownloadEntry) {
+        val sourceUrl = download.sourceUrl ?: return
+        val resolvedSubfolder = download.subfolder?.takeIf { it.isNotBlank() }
+            ?: (if (isMergeJobDownloadId(download.id)) {
+                MergeJobStore.snapshot().values.firstOrNull { mergeJobToDownloadId(it.id) == download.id }?.subfolder
+            } else null)?.takeIf { it.isNotBlank() }
+            ?: MergeJobStore.snapshot().values.firstOrNull { it.sourceUrl == sourceUrl }?.subfolder?.takeIf { it.isNotBlank() }
+            ?: readTrackedSubfolders()[download.id]?.takeIf { it.isNotBlank() }
+            ?: extractSubfolderFromUriString(download.localUri)
+            ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() }
+            ?: uiState.value.settings.downloadSubfolder
+        val downloadLoc = defaultDownloadLocation(resolvedSubfolder)
+
+        try {
+            val previewResult = runCatching {
+                if (isInstagramHost(sourceUrl)) {
+                    inspectInstagramLink(url = sourceUrl)
+                } else {
+                    resolveWithPythonOrFallback(sourceUrl)
+                }
+            }.getOrElse { error ->
+                val errorMsg = error.message.orEmpty()
+                val isYt = isYouTubeUrl(sourceUrl)
+                val hasCookies = CookieHelper.hasValidCookies(appContext)
+                if (isYouTubeAuthRequired(isYt, hasCookies, errorMsg) || (isYt && !hasCookies)) {
+                    promptYouTubeAuth(
+                        reason = "YouTube requires authentication to download this video: $errorMsg",
+                        retryDownload = download.copy(subfolder = resolvedSubfolder),
+                    )
+                }
+                throw error
+            }
+
+            val primary = previewResult.items.firstOrNull()
+                ?: throw IllegalArgumentException("No media streams found to download.")
+
+            val preferAudioOnly = download.kind == MediaKind.Audio
+            val preset = if (preferAudioOnly) {
+                uiState.value.settings.preferredQuality
+            } else {
+                uiState.value.settings.preferredQuality.takeIf { it != QualityPreset.AskEveryTime }
+                    ?: QualityPreset.BestQuality
+            }
+            val videoPref = uiState.value.settings.preferredVideoFormat
+            val audioPref = uiState.value.settings.preferredAudioFormat
+
+            val chosen = chooseFormatForPreset(
+                formats = primary.formats,
+                preset = preset,
+                videoPref = videoPref,
+                audioPref = audioPref,
+                preferAudioOnly = preferAudioOnly,
+            ) ?: primary.formats.firstOrNull()
+
+            val useMergeService = chosen != null && shouldDownloadWithMergeService(
+                format = chosen,
+                sourceUrl = sourceUrl,
+                audioPref = audioPref,
+            )
+            if (useMergeService) {
+                val format = chosen ?: return
+                if (!hasPlayableMediaUrls(format)) {
                     val isYt = isYouTubeUrl(sourceUrl)
                     val hasCookies = CookieHelper.hasValidCookies(appContext)
-                    if (isYouTubeAuthRequired(isYt, hasCookies, errorMsg) || (isYt && !hasCookies)) {
+                    if (isYt && !hasCookies) {
                         promptYouTubeAuth(
-                            reason = "YouTube requires authentication to download this video: $errorMsg",
+                            reason = "YouTube requires authentication to download this video.",
                             retryDownload = download.copy(subfolder = resolvedSubfolder),
                         )
+                        _uiState.update {
+                            it.copy(message = "Sign in to YouTube to retry this download.")
+                        }
+                    } else {
+                        _uiState.update {
+                            it.copy(message = "Cannot retry download: No playable media stream found.")
+                        }
                     }
-                    throw error
+                    return
                 }
 
-                val primary = previewResult.items.firstOrNull()
-                    ?: throw IllegalArgumentException("No media streams found to download.")
+                // Remove the old failed download entry once resolved successfully
+                removeDownloadEntrySilently(download.id)
 
-                val preferAudioOnly = download.kind == MediaKind.Audio
-                val preset = if (preferAudioOnly) {
-                    uiState.value.settings.preferredQuality
-                } else {
-                    uiState.value.settings.preferredQuality.takeIf { it != QualityPreset.AskEveryTime }
-                        ?: QualityPreset.BestQuality
-                }
-                val videoPref = uiState.value.settings.preferredVideoFormat
-                val audioPref = uiState.value.settings.preferredAudioFormat
-
-                val chosen = chooseFormatForPreset(
-                    formats = primary.formats,
-                    preset = preset,
-                    videoPref = videoPref,
-                    audioPref = audioPref,
-                    preferAudioOnly = preferAudioOnly,
-                ) ?: primary.formats.firstOrNull()
-
-                val useMergeService = chosen != null && shouldDownloadWithMergeService(
-                    format = chosen,
+                enqueueMergeJob(
                     sourceUrl = sourceUrl,
-                    audioPref = audioPref,
+                    item = primary,
+                    format = format,
+                    subfolder = resolvedSubfolder,
+                    isPriority = true,
                 )
-                if (useMergeService) {
-                    val format = chosen ?: return@launch
-                    if (!hasPlayableMediaUrls(format)) {
-                        val isYt = isYouTubeUrl(sourceUrl)
-                        val hasCookies = CookieHelper.hasValidCookies(appContext)
-                        if (isYt && !hasCookies) {
-                            promptYouTubeAuth(
-                                reason = "YouTube requires authentication to download this video.",
-                                retryDownload = download.copy(subfolder = resolvedSubfolder),
-                            )
-                            _uiState.update {
-                                it.copy(message = "Sign in to YouTube to retry this download.")
-                            }
-                        } else {
-                            _uiState.update {
-                                it.copy(message = "Cannot retry download: No playable media stream found.")
-                            }
-                        }
-                        return@launch
-                    }
-
-                    // Remove the old failed download entry once resolved successfully
-                    removeDownloadEntrySilently(download.id)
-
-                    enqueueMergeJob(
-                        sourceUrl = sourceUrl,
-                        item = primary,
-                        format = format,
-                        subfolder = resolvedSubfolder,
-                    )
-                    _uiState.update {
-                        it.copy(
-                            currentScreen = AppScreen.Downloads,
-                            message = "Download restarted in $downloadLoc",
-                        )
-                    }
-                } else {
-                    val resolved = resolveItemForDownload(primary, chosen?.formatId)
-                    val directUrl = resolved.resolvedUrl.ifBlank { chosen?.mediaUrl.orEmpty() }
-                    if (directUrl.isBlank()) {
-                        val isYt = isYouTubeUrl(sourceUrl)
-                        val hasCookies = CookieHelper.hasValidCookies(appContext)
-                        if (isYt && !hasCookies) {
-                            promptYouTubeAuth(
-                                reason = "YouTube requires authentication to download this video.",
-                                retryDownload = download.copy(subfolder = resolvedSubfolder),
-                            )
-                            _uiState.update {
-                                it.copy(message = "Sign in to YouTube to retry this download.")
-                            }
-                        } else {
-                            _uiState.update {
-                                it.copy(message = "Cannot retry download: No playable media stream found.")
-                            }
-                        }
-                        return@launch
-                    }
-
-                    val manager = downloadManager ?: run {
-                        _uiState.update { it.copy(message = "Download service is unavailable.") }
-                        return@launch
-                    }
-                    // Remove the old failed download entry once resolved successfully
-                    removeDownloadEntrySilently(download.id)
-
-                    enqueuePreviewItems(
-                        manager = manager,
-                        sourceUrl = sourceUrl,
-                        items = listOf(resolved),
-                        formats = listOf(chosen),
-                        subfolder = resolvedSubfolder,
-                    )
-                    _uiState.update {
-                        it.copy(
-                            currentScreen = AppScreen.Downloads,
-                            message = "Download restarted in $downloadLoc",
-                        )
-                    }
-                }
-                refreshDownloads()
-            } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(message = e.message ?: "Failed to restart download.")
+                    it.copy(
+                        currentScreen = AppScreen.Downloads,
+                        message = "Download restarted in $downloadLoc",
+                    )
                 }
-            } finally {
+            } else {
+                val resolved = resolveItemForDownload(primary, chosen?.formatId)
+                val directUrl = resolved.resolvedUrl.ifBlank { chosen?.mediaUrl.orEmpty() }
+                if (directUrl.isBlank()) {
+                    val isYt = isYouTubeUrl(sourceUrl)
+                    val hasCookies = CookieHelper.hasValidCookies(appContext)
+                    if (isYt && !hasCookies) {
+                        promptYouTubeAuth(
+                            reason = "YouTube requires authentication to download this video.",
+                            retryDownload = download.copy(subfolder = resolvedSubfolder),
+                        )
+                        _uiState.update {
+                            it.copy(message = "Sign in to YouTube to retry this download.")
+                        }
+                    } else {
+                        _uiState.update {
+                            it.copy(message = "Cannot retry download: No playable media stream found.")
+                        }
+                    }
+                    return
+                }
+
+                val manager = downloadManager ?: run {
+                    _uiState.update { it.copy(message = "Download service is unavailable.") }
+                    return
+                }
+                // Remove the old failed download entry once resolved successfully
+                removeDownloadEntrySilently(download.id)
+
+                enqueuePreviewItems(
+                    manager = manager,
+                    sourceUrl = sourceUrl,
+                    items = listOf(resolved),
+                    formats = listOf(chosen),
+                    subfolder = resolvedSubfolder,
+                )
                 _uiState.update {
-                    it.copy(retryingDownloadIds = it.retryingDownloadIds - download.id)
+                    it.copy(
+                        currentScreen = AppScreen.Downloads,
+                        message = "Download restarted in $downloadLoc",
+                    )
                 }
+            }
+            refreshDownloads()
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(message = e.message ?: "Failed to restart download.")
+            }
+        } finally {
+            _uiState.update {
+                it.copy(retryingDownloadIds = it.retryingDownloadIds - download.id)
             }
         }
     }
@@ -1907,6 +1995,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                         customSubfolders = customFolders,
                         hasYouTubeCookies = CookieHelper.hasValidCookies(appContext),
                         youtubeCookiesLastModified = CookieHelper.getCookiesLastModified(appContext),
+                        fileConflictBehavior = FileConflictBehavior.fromStorageKey(prefs[PreferenceKeys.fileConflictBehavior]),
+                        downloadSubtitles = prefs[PreferenceKeys.downloadSubtitles] ?: false,
                     )
                 }
                 .collect { settings ->
@@ -2274,6 +2364,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         )
         val thumbnail = json.optString("thumbnail").takeIf { it.isNotBlank() }
             ?: extractYouTubeThumbnailUrl(previewFormat.mediaUrl)
+        val subtitleObj = json.optJSONObject("subtitle")
+        val subtitleUrl = subtitleObj?.optString("url")?.takeIf { it.isNotBlank() }
+        val subtitleExt = subtitleObj?.optString("ext")?.takeIf { it.isNotBlank() }
         return PreviewMediaItem(
             resolvedUrl = previewFormat.mediaUrl,
             title = sanitizedTitle,
@@ -2286,6 +2379,8 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             fileName = fileName,
             formats = formats,
             thumbnailUrl = thumbnail,
+            subtitleUrl = subtitleUrl,
+            subtitleExt = subtitleExt,
         )
     }
 

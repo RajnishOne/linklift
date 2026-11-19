@@ -265,6 +265,57 @@ private fun resolveAndAttemptDeleteFile(
     return false
 }
 
+internal fun findExistingMediaFile(
+    context: Context?,
+    fileName: String,
+    subfolder: String? = null,
+): Uri? {
+    if (fileName.isBlank()) return null
+    val clean = MergeDownloadService.sanitizeSubfolder(subfolder)
+
+    // 1. Direct file on disk
+    runCatching {
+        val pubDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        val baseDir = File(pubDir, "LinkLift")
+        val targetDir = if (clean.isBlank()) baseDir else File(baseDir, clean)
+        val directFile = File(targetDir, fileName)
+        if (directFile.exists() && directFile.length() > 0L) {
+            return Uri.fromFile(directFile)
+        }
+    }
+
+    // 2. MediaStore on Android 10+ (API 29+)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && context != null) {
+        runCatching {
+            val resolver = context.contentResolver
+            val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            val relPath = if (clean.isBlank()) {
+                "${android.os.Environment.DIRECTORY_DOWNLOADS}/LinkLift/"
+            } else {
+                "${android.os.Environment.DIRECTORY_DOWNLOADS}/LinkLift/$clean/"
+            }
+            val relPathNoSlash = relPath.removeSuffix("/")
+            val projection = arrayOf(MediaStore.Downloads._ID, MediaStore.Downloads.SIZE)
+            val selection = "${MediaStore.Downloads.DISPLAY_NAME} = ? AND (${MediaStore.Downloads.RELATIVE_PATH} = ? OR ${MediaStore.Downloads.RELATIVE_PATH} = ?)"
+            val selectionArgs = arrayOf(fileName, relPath, relPathNoSlash)
+
+            resolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idCol = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+                    val sizeCol = cursor.getColumnIndex(MediaStore.Downloads.SIZE)
+                    val size = if (sizeCol >= 0) cursor.getLong(sizeCol) else 1L
+                    if (size > 0L) {
+                        val id = cursor.getLong(idCol)
+                        return android.content.ContentUris.withAppendedId(collection, id)
+                    }
+                }
+            }
+        }
+    }
+
+    return null
+}
+
 internal fun deleteDownloadedPhysicalFile(context: Context?, localUri: String?): Boolean {
     if (localUri.isNullOrBlank()) return false
     var deleted = false

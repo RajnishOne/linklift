@@ -432,6 +432,41 @@ class TestGenericMediaResolver(unittest.TestCase):
                 self.assertEqual(pair["format_id"], "251")
                 self.assertEqual(pair["ext"], "webm")
 
+    def test_extract_best_subtitle(self):
+        from generic_media_resolver import _extract_best_subtitle
+        entry_with_manual = {
+            "subtitles": {
+                "es": [{"ext": "vtt", "url": "https://example.com/es.vtt"}],
+                "en": [
+                    {"ext": "srv3", "url": "https://example.com/en.srv3"},
+                    {"ext": "vtt", "url": "https://example.com/en.vtt"},
+                    {"ext": "srt", "url": "https://example.com/en.srt"},
+                ],
+            },
+            "automatic_captions": {
+                "en": [{"ext": "vtt", "url": "https://example.com/auto_en.vtt"}],
+            },
+        }
+        sub = _extract_best_subtitle(entry_with_manual)
+        self.assertIsNotNone(sub)
+        self.assertEqual(sub["lang"], "en")
+        self.assertEqual(sub["ext"], "srt")
+        self.assertEqual(sub["url"], "https://example.com/en.srt")
+
+        entry_auto_only = {
+            "automatic_captions": {
+                "en": [{"ext": "vtt", "url": "https://example.com/auto_en.vtt"}],
+            }
+        }
+        sub_auto = _extract_best_subtitle(entry_auto_only)
+        self.assertIsNotNone(sub_auto)
+        self.assertEqual(sub_auto["lang"], "en")
+        self.assertEqual(sub_auto["ext"], "vtt")
+        self.assertEqual(sub_auto["url"], "https://example.com/auto_en.vtt")
+
+        entry_empty = {}
+        self.assertIsNone(_extract_best_subtitle(entry_empty))
+
 
 class TestInstagramResolver(unittest.TestCase):
 

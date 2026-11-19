@@ -23,4 +23,6 @@ internal object PreferenceKeys {
     val downloadSubfolders = stringPreferencesKey("download_subfolders")
     val downloadSubfolder = stringPreferencesKey("download_subfolder")
     val customSubfolders = stringSetPreferencesKey("custom_subfolders")
+    val fileConflictBehavior = stringPreferencesKey("file_conflict_behavior")
+    val downloadSubtitles = booleanPreferencesKey("download_subtitles")
 }

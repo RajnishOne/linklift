@@ -230,6 +230,16 @@ internal fun LinkLiftRoot(
                                     viewModel.retryDownload(download)
                                 }
                             },
+                            onRetryAllFailed = {
+                                ensureDownloadPermission {
+                                    viewModel.retryAllFailedDownloads()
+                                }
+                            },
+                            onRetrySelected = { selectedIds ->
+                                ensureDownloadPermission {
+                                    viewModel.retrySelectedDownloads(selectedIds)
+                                }
+                            },
                             onPromptYouTubeAuth = { download ->
                                 viewModel.promptYouTubeAuth(
                                     reason = "A YouTube download was blocked. Sign in or import cookies to download this video.",
@@ -246,6 +256,8 @@ internal fun LinkLiftRoot(
                             onPreferredPresetChanged = viewModel::updatePreferredQuality,
                             onPreferredVideoFormatChanged = viewModel::updatePreferredVideoFormat,
                             onPreferredAudioFormatChanged = viewModel::updatePreferredAudioFormat,
+                            onFileConflictBehaviorChanged = viewModel::updateFileConflictBehavior,
+                            onDownloadSubtitlesChanged = viewModel::updateDownloadSubtitles,
                             onSignInYouTube = {
                                 youTubeAuthLauncher.launch(YouTubeAuthActivity.createIntent(context))
                             },
