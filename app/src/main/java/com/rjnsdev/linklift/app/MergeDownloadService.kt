@@ -54,8 +54,10 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
 import java.util.Locale
+import java.util.PriorityQueue
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -83,6 +85,11 @@ class MergeDownloadService : Service() {
         const val EXTRA_SOURCE_URL = "source_url"
         const val EXTRA_MIME_TYPE = "mime_type"
         const val EXTRA_SUBFOLDER = "subfolder"
+        const val EXTRA_IS_PRIORITY = "is_priority"
+        const val EXTRA_CONFLICT_BEHAVIOR = "conflict_behavior"
+        const val EXTRA_SUBTITLE_URL = "subtitle_url"
+        const val EXTRA_SUBTITLE_EXT = "subtitle_ext"
+        const val EXTRA_DOWNLOAD_SUBTITLES = "download_subtitles"
 
         private const val DOWNLOAD_MAX_ATTEMPTS = 4
         private const val DOWNLOAD_RETRY_BASE_MS = 1_000L
@@ -132,6 +139,11 @@ class MergeDownloadService : Service() {
             audioHeaders: Map<String, String>,
             audioSize: Long,
             subfolder: String? = null,
+            isPriority: Boolean = false,
+            conflictBehavior: String? = null,
+            subtitleUrl: String? = null,
+            subtitleExt: String? = null,
+            downloadSubtitles: Boolean = false,
         ) {
             if (videoUrl.isBlank() && audioUrl.isBlank()) {
                 runningJobIds.remove(jobId)
@@ -174,6 +186,11 @@ class MergeDownloadService : Service() {
                 putExtra(EXTRA_AUDIO_EXT, audioExt)
                 putExtra(EXTRA_AUDIO_SIZE, audioSize)
                 putExtra(EXTRA_AUDIO_HEADERS, headersToBundle(audioHeaders))
+                putExtra(EXTRA_IS_PRIORITY, isPriority)
+                putExtra(EXTRA_CONFLICT_BEHAVIOR, conflictBehavior)
+                putExtra(EXTRA_SUBTITLE_URL, subtitleUrl)
+                putExtra(EXTRA_SUBTITLE_EXT, subtitleExt)
+                putExtra(EXTRA_DOWNLOAD_SUBTITLES, downloadSubtitles)
             }
             startForegroundServiceInvoker(nonNullContext, intent)
         }
@@ -235,10 +252,26 @@ class MergeDownloadService : Service() {
         }
     }
 
+    private data class QueuedTask(
+        val jobId: String,
+        val isPriority: Boolean,
+        val sequenceNumber: Long,
+        val execute: suspend () -> Unit,
+    ) : Comparable<QueuedTask> {
+        override fun compareTo(other: QueuedTask): Int {
+            if (this.isPriority != other.isPriority) {
+                return if (this.isPriority) -1 else 1
+            }
+            return this.sequenceNumber.compareTo(other.sequenceNumber)
+        }
+    }
+
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = mutableMapOf<String, Job>()
-    private val jobMutex = Mutex()
-    private val jobSemaphore = Semaphore(2)
+    private val pendingQueue = PriorityQueue<QueuedTask>()
+    private val queueMutex = Mutex()
+    private val taskSequence = AtomicLong(0L)
+    private var activeWorkerCount = 0
     private val notificationManager by lazy {
         getSystemService(NOTIFICATION_SERVICE) as NotificationManager
     }
@@ -273,6 +306,9 @@ class MergeDownloadService : Service() {
     override fun onDestroy() {
         val jobsToClean = synchronized(activeJobs) { activeJobs.keys.toList() }
         jobsToClean.forEach { runningJobIds.remove(it) }
+        serviceScope.launch {
+            queueMutex.withLock { pendingQueue.clear() }
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -300,6 +336,11 @@ class MergeDownloadService : Service() {
         val videoHeaders = bundleToHeaders(intent.getBundleExtra(EXTRA_VIDEO_HEADERS))
         val audioHeaders = bundleToHeaders(intent.getBundleExtra(EXTRA_AUDIO_HEADERS))
         val subfolder = sanitizeSubfolder(intent.getStringExtra(EXTRA_SUBFOLDER)).takeIf { it.isNotBlank() }
+        val isPriority = intent.getBooleanExtra(EXTRA_IS_PRIORITY, false)
+        val conflictBehavior = intent.getStringExtra(EXTRA_CONFLICT_BEHAVIOR)
+        val subtitleUrl = intent.getStringExtra(EXTRA_SUBTITLE_URL)
+        val subtitleExt = intent.getStringExtra(EXTRA_SUBTITLE_EXT)
+        val downloadSubtitles = intent.getBooleanExtra(EXTRA_DOWNLOAD_SUBTITLES, false)
 
         processStartMerge(
             jobId = jobId,
@@ -317,6 +358,11 @@ class MergeDownloadService : Service() {
             videoHeaders = videoHeaders,
             audioHeaders = audioHeaders,
             subfolder = subfolder,
+            isPriority = isPriority,
+            conflictBehavior = conflictBehavior,
+            subtitleUrl = subtitleUrl,
+            subtitleExt = subtitleExt,
+            downloadSubtitles = downloadSubtitles,
         )
     }
 
@@ -336,6 +382,11 @@ class MergeDownloadService : Service() {
         videoHeaders: Map<String, String> = emptyMap(),
         audioHeaders: Map<String, String> = emptyMap(),
         subfolder: String? = null,
+        isPriority: Boolean = false,
+        conflictBehavior: String? = null,
+        subtitleUrl: String? = null,
+        subtitleExt: String? = null,
+        downloadSubtitles: Boolean = false,
     ) {
         if (jobId.isNullOrBlank()) {
             val fallback = MergeJobRecord(
@@ -413,43 +464,70 @@ class MergeDownloadService : Service() {
         MergeJobStore.upsert(initial, runCatching { applicationContext }.getOrNull())
         startForegroundIfNeeded(initial)
 
-        serviceScope.launch {
-            jobMutex.withLock {
-                if (activeJobs[jobId]?.isActive == true) return@withLock
-                val job = serviceScope.launch {
-                    try {
-                        jobSemaphore.withPermit {
-                            runMergeJob(
-                                jobId = jobId,
-                                title = title,
-                                description = description,
-                                outputFileName = outputFileName,
-                                mimeType = mimeType,
-                                sourceUrl = sourceUrl,
-                                videoUrl = videoUrl,
-                                videoExt = videoExt,
-                                videoHeaders = videoHeaders,
-                                audioUrl = audioUrl,
-                                audioExt = audioExt,
-                                audioHeaders = audioHeaders,
-                                videoSize = videoSize,
-                                audioSize = audioSize,
-                                subfolder = subfolder,
-                            )
-                        }
-                    } finally {
-                        onJobFinished(jobId)
-                    }
-                }
-                activeJobs[jobId] = job
+        val task = QueuedTask(
+            jobId = jobId,
+            isPriority = isPriority,
+            sequenceNumber = taskSequence.incrementAndGet(),
+            execute = {
+                runMergeJob(
+                    jobId = jobId,
+                    title = title,
+                    description = description,
+                    outputFileName = outputFileName,
+                    mimeType = mimeType,
+                    sourceUrl = sourceUrl,
+                    videoUrl = videoUrl,
+                    videoExt = videoExt,
+                    videoHeaders = videoHeaders,
+                    audioUrl = audioUrl,
+                    audioExt = audioExt,
+                    audioHeaders = audioHeaders,
+                    videoSize = videoSize,
+                    audioSize = audioSize,
+                    subfolder = subfolder,
+                    conflictBehavior = conflictBehavior,
+                    subtitleUrl = subtitleUrl,
+                    subtitleExt = subtitleExt,
+                    downloadSubtitles = downloadSubtitles,
+                )
             }
+        )
+
+        serviceScope.launch {
+            queueMutex.withLock {
+                if (activeJobs[jobId]?.isActive == true) return@withLock
+                pendingQueue.add(task)
+                drainQueueLocked()
+            }
+        }
+    }
+
+    private fun drainQueueLocked() {
+        while (activeWorkerCount < 2 && pendingQueue.isNotEmpty()) {
+            val nextTask = pendingQueue.poll() ?: break
+            activeWorkerCount++
+            val job = serviceScope.launch {
+                try {
+                    nextTask.execute()
+                } finally {
+                    queueMutex.withLock {
+                        activeWorkerCount--
+                        drainQueueLocked()
+                    }
+                    onJobFinished(nextTask.jobId)
+                }
+            }
+            activeJobs[nextTask.jobId] = job
         }
     }
 
     private fun handleCancel(jobId: String?) {
         if (jobId.isNullOrBlank()) return
         serviceScope.launch {
-            jobMutex.withLock { activeJobs.remove(jobId)?.cancel() }
+            queueMutex.withLock {
+                pendingQueue.removeIf { it.jobId == jobId }
+                activeJobs.remove(jobId)?.cancel()
+            }
             MergeJobStore.update(applicationContext, jobId) { record ->
                 if (record.state == MergeJobState.Completed) record
                 else record.copy(
@@ -463,9 +541,9 @@ class MergeDownloadService : Service() {
 
     private suspend fun onJobFinished(jobId: String) {
         runningJobIds.remove(jobId)
-        jobMutex.withLock {
+        queueMutex.withLock {
             activeJobs.remove(jobId)
-            if (activeJobs.isEmpty()) {
+            if (activeJobs.isEmpty() && pendingQueue.isEmpty() && activeWorkerCount == 0) {
                 stopForegroundCompat()
                 stopSelfCompat()
             }
@@ -488,12 +566,41 @@ class MergeDownloadService : Service() {
         videoSize: Long = 0L,
         audioSize: Long = 0L,
         subfolder: String? = null,
+        conflictBehavior: String? = null,
+        subtitleUrl: String? = null,
+        subtitleExt: String? = null,
+        downloadSubtitles: Boolean = false,
     ) {
+        val conflictPolicy = FileConflictBehavior.fromStorageKey(conflictBehavior)
+        val existingUri = findExistingMediaFile(applicationContext, outputFileName, subfolder)
+        if (existingUri != null) {
+            when (conflictPolicy) {
+                FileConflictBehavior.Skip -> {
+                    updateState(jobId) {
+                        it.copy(
+                            state = MergeJobState.Completed,
+                            resultUri = existingUri.toString(),
+                            description = "Skipped (already exists)",
+                            updatedAt = System.currentTimeMillis(),
+                        )
+                    }
+                    return
+                }
+                FileConflictBehavior.Overwrite -> {
+                    deleteDownloadedPhysicalFile(applicationContext, existingUri.toString())
+                }
+                FileConflictBehavior.Rename -> {
+                    // Default behavior: MediaStore will append (1), (2), etc.
+                }
+            }
+        }
+
         val tempDir = File(applicationContext.cacheDir, "merge").apply { mkdirs() }
         val videoTemp = File(tempDir, "${jobId}_video.${videoExt}")
         val audioTemp = File(tempDir, "${jobId}_audio.${audioExt}")
         val muxedTemp = File(tempDir, "${jobId}_muxed.${outputExtension(outputFileName, mimeType)}")
         val mp3Temp = File(tempDir, "${jobId}_converted.mp3")
+        val srtTemp = File(tempDir, "${jobId}_subtitles.srt")
 
         try {
             val hasVideo = videoUrl.isNotBlank()
@@ -588,6 +695,24 @@ class MergeDownloadService : Service() {
                 description = description,
                 subfolder = subfolder,
             )
+
+            if (downloadSubtitles && !subtitleUrl.isNullOrBlank()) {
+                runCatching {
+                    downloadAndConvertSubtitle(subtitleUrl, subtitleExt, srtTemp)
+                    if (srtTemp.exists() && srtTemp.length() > 0L) {
+                        val baseName = outputFileName.substringBeforeLast('.', outputFileName)
+                        val srtFileName = "$baseName.srt"
+                        publishToDownloads(
+                            source = srtTemp,
+                            fileName = srtFileName,
+                            mimeType = "application/x-subrip",
+                            description = "Subtitles for $title",
+                            subfolder = subfolder,
+                        )
+                    }
+                }
+            }
+
             updateState(jobId) {
                 it.copy(
                     state = MergeJobState.Completed,
@@ -626,6 +751,22 @@ class MergeDownloadService : Service() {
             runCatching { if (audioTemp.exists()) audioTemp.delete() }
             runCatching { if (muxedTemp.exists()) muxedTemp.delete() }
             runCatching { if (mp3Temp.exists()) mp3Temp.delete() }
+            runCatching { if (srtTemp.exists()) srtTemp.delete() }
+        }
+    }
+
+    private fun downloadAndConvertSubtitle(url: String, ext: String?, target: File) {
+        val request = Request.Builder().url(url).build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return
+            val body = response.body?.string().orEmpty()
+            if (body.isBlank()) return
+            val srt = if (ext.equals("vtt", ignoreCase = true) || body.contains("WEBVTT")) {
+                convertVttToSrt(body)
+            } else {
+                body
+            }
+            target.writeText(srt, Charsets.UTF_8)
         }
     }
 
@@ -1345,4 +1486,54 @@ class MergeDownloadService : Service() {
         MergeJobState.Muxing,
         MergeJobState.ConvertingAudio,
     )
+}
+
+internal fun convertVttToSrt(vtt: String): String {
+    val lines = vtt.lines()
+    val out = StringBuilder()
+    var cueIndex = 1
+    var i = 0
+    // Skip WEBVTT header and header comments/styles
+    while (i < lines.size) {
+        val line = lines[i].trim()
+        if (line.contains("-->")) break
+        i++
+    }
+
+    var inCue = false
+    while (i < lines.size) {
+        val line = lines[i].trim()
+        if (line.contains("-->")) {
+            val parts = line.split("-->")
+            if (parts.size >= 2) {
+                val start = normalizeVttTimestamp(parts[0].trim())
+                val endPart = parts[1].trim()
+                val end = normalizeVttTimestamp(endPart.substringBefore(" ").trim())
+                if (out.isNotEmpty()) out.append("\n")
+                out.append(cueIndex++).append("\n")
+                out.append("$start --> $end\n")
+                inCue = true
+            }
+        } else if (line.isBlank()) {
+            if (inCue) {
+                out.append("\n")
+                inCue = false
+            }
+        } else if (inCue) {
+            val cleaned = line.replace(Regex("<[^>]+>"), "")
+            out.append(cleaned).append("\n")
+        }
+        i++
+    }
+    return out.toString().trim() + "\n"
+}
+
+private fun normalizeVttTimestamp(raw: String): String {
+    val comma = raw.replace('.', ',')
+    val parts = comma.split(":")
+    return when (parts.size) {
+        2 -> "00:${parts[0].padStart(2, '0')}:${parts[1]}"
+        3 -> "${parts[0].padStart(2, '0')}:${parts[1]}:${parts[2]}"
+        else -> comma
+    }
 }

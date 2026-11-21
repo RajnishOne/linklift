@@ -2,7 +2,7 @@ package com.rjnsdev.linklift.app
 
 import java.util.Locale
 
-internal const val BATCH_MAX_ITEMS = 200
+internal const val BATCH_MAX_ITEMS = 1000
 internal const val BATCH_AUTO_SELECT_LIMIT = 50
 
 enum class AppScreen {
@@ -133,6 +133,33 @@ enum class AudioFormatPreference(val storageKey: String, val label: String, val 
     }
 }
 
+enum class FileConflictBehavior(
+    val storageKey: String,
+    val label: String,
+    val description: String,
+) {
+    Rename(
+        storageKey = "rename",
+        label = "Add serial suffix",
+        description = "Keep both files by adding (1), (2) to the new file",
+    ),
+    Skip(
+        storageKey = "skip",
+        label = "Skip existing",
+        description = "Skip download if a file with the same name already exists",
+    ),
+    Overwrite(
+        storageKey = "overwrite",
+        label = "Overwrite",
+        description = "Replace existing file with the new download",
+    );
+
+    companion object {
+        fun fromStorageKey(key: String?): FileConflictBehavior =
+            entries.firstOrNull { it.storageKey == key } ?: Rename
+    }
+}
+
 data class UserPreferences(
     val wifiOnly: Boolean = false,
     val completionNotifications: Boolean = true,
@@ -145,6 +172,8 @@ data class UserPreferences(
     val customSubfolders: Set<String> = emptySet(),
     val hasYouTubeCookies: Boolean = false,
     val youtubeCookiesLastModified: Long = 0L,
+    val fileConflictBehavior: FileConflictBehavior = FileConflictBehavior.Rename,
+    val downloadSubtitles: Boolean = false,
 ) {
     val effectiveDownloadPath: String
         get() = if (downloadSubfolder.isBlank()) "Download/LinkLift" else "Download/LinkLift/${downloadSubfolder.trim().trim('/')}"
@@ -171,6 +200,8 @@ data class MediaFormat(
     val acodec: String? = null,
     val httpHeaders: Map<String, String> = emptyMap(),
     val mergeAudio: MediaFormat? = null,
+    val subtitleUrl: String? = null,
+    val subtitleExt: String? = null,
 ) {
     val requiresMerge: Boolean get() = isVideoOnly && mergeAudio != null
 }
@@ -187,6 +218,8 @@ data class PreviewMediaItem(
     val fileName: String,
     val formats: List<MediaFormat> = emptyList(),
     val thumbnailUrl: String? = null,
+    val subtitleUrl: String? = null,
+    val subtitleExt: String? = null,
 )
 
 data class MediaPreview(

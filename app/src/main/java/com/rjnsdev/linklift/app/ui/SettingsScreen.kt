@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ClosedCaption
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.FileUpload
@@ -83,6 +84,8 @@ internal fun SettingsScreen(
     onPreferredPresetChanged: (QualityPreset) -> Unit,
     onPreferredVideoFormatChanged: (VideoFormatPreference) -> Unit,
     onPreferredAudioFormatChanged: (AudioFormatPreference) -> Unit,
+    onFileConflictBehaviorChanged: (FileConflictBehavior) -> Unit = {},
+    onDownloadSubtitlesChanged: (Boolean) -> Unit = {},
     onSignInYouTube: () -> Unit,
     onImportCookiesFile: () -> Unit,
     onImportCookiesClipboard: () -> Unit,
@@ -206,6 +209,16 @@ internal fun SettingsScreen(
         }
 
         item {
+            SettingSwitchCard(
+                icon = Icons.Rounded.ClosedCaption,
+                title = "Download subtitles / lyrics",
+                subtitle = "Save subtitles and lyrics (.srt) alongside media files when available.",
+                checked = preferences.downloadSubtitles,
+                onCheckedChange = onDownloadSubtitlesChanged,
+            )
+        }
+
+        item {
             NeonCard {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -305,6 +318,52 @@ internal fun SettingsScreen(
                                 val isSelected = preferences.preferredAudioFormat == pref
                                 Surface(
                                     onClick = { onPreferredAudioFormatChanged(pref) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isSelected) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isSelected) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                    ),
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Text(
+                                            text = pref.label,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) Color.White else LinkLiftTextSecondary,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Section 4: When file already exists
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "When file already exists",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                        )
+                        Text(
+                            text = "Action to take when a file with the same name already exists in storage.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LinkLiftTextSecondary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            FileConflictBehavior.entries.forEach { pref ->
+                                val isSelected = preferences.fileConflictBehavior == pref
+                                Surface(
+                                    onClick = { onFileConflictBehaviorChanged(pref) },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(14.dp),
                                     color = if (isSelected) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),

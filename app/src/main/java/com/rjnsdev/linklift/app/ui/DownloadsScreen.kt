@@ -95,6 +95,8 @@ internal fun DownloadsScreen(
     onRegenerateTracked: (String?) -> Unit,
     onCancelDownload: (Long) -> Unit,
     onRetryDownload: (DownloadEntry) -> Unit = {},
+    onRetryAllFailed: () -> Unit = {},
+    onRetrySelected: (Set<Long>) -> Unit = {},
     onPromptYouTubeAuth: (DownloadEntry) -> Unit = {},
     retryingDownloadIds: Set<Long> = emptySet(),
 ) {
@@ -111,6 +113,7 @@ internal fun DownloadsScreen(
         }
     }
     val visibleIds = remember(filtered) { filtered.map { it.id }.toSet() }
+    val failedDownloads = remember(downloads) { downloads.filter { it.state == DownloadState.Failed } }
 
     LaunchedEffect(downloads) {
         val validIds = downloads.map { it.id }.toSet()
@@ -200,6 +203,26 @@ internal fun DownloadsScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             if (selectionMode) {
+                                val selectedFailedCount = remember(downloads, selectedIds) {
+                                    downloads.count { it.id in selectedIds && it.state == DownloadState.Failed }
+                                }
+                                if (selectedFailedCount > 0) {
+                                    Button(
+                                        onClick = { onRetrySelected(selectedIds) },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = LinkLiftAccent,
+                                            contentColor = Color.Black,
+                                        ),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Retry failed ($selectedFailedCount)")
+                                    }
+                                }
                                 TextButton(
                                     onClick = { selectedIds = selectedIds + visibleIds },
                                     enabled = visibleIds.any { it !in selectedIds },
@@ -242,6 +265,23 @@ internal fun DownloadsScreen(
                                     Text("Delete selected")
                                 }
                             } else {
+                                if (failedDownloads.isNotEmpty()) {
+                                    Button(
+                                        onClick = onRetryAllFailed,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = LinkLiftAccent,
+                                            contentColor = Color.Black,
+                                        ),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Retry all failed (${failedDownloads.size})")
+                                    }
+                                }
                                 OutlinedButton(onClick = { selectionMode = true }) {
                                     Text("Select items to delete")
                                 }
