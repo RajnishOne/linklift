@@ -1,0 +1,5 @@
+- Large playlist support: Expanded batch extraction limit up to 1000 items to fetch and download full 400+ video playlists
+- One-tap retry: Added "Retry all failed" and selection retry buttons in Downloads screen to effortlessly restart failed tasks
+- Queue priority: Retried tasks are prioritized to jump straight to the head of the download queue
+- File conflict policy: Added a new setting to Skip, Overwrite, or Add serial suffix to existing files (ideal for resuming partial playlist downloads)
+- Subtitles & lyrics: Added support for downloading and auto-converting captions to .srt alongside media files for VLC and other media players

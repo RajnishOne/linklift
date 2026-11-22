@@ -8,7 +8,8 @@ Key Features:
 • Download YouTube videos in multiple resolutions: 720p, 1080p Full HD, 2K, and 4K
 • Fast YouTube Shorts downloader with instant preview
 • Convert & extract YouTube videos to high-quality audio (MP3, M4A)
-• Batch download full YouTube playlists and channels
+• Batch download full YouTube playlists and channels (up to 1,000 items)
+• Download subtitles and lyrics (.srt) alongside media files
 • Local video and audio stream merging via native MediaMuxer for seamless playback
 
 📸 Instagram Video & Reels Downloader
