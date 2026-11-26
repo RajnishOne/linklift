@@ -1,0 +1,5 @@
+- YouTube age-restricted & live streams: Bundled native C QuickJS runtime to handle signature deciphering without external JS engines, resolving 403 Forbidden errors and stream extraction
+- Batch conflict pre-check: Automatically checks existing files on disk before resolving links when conflict policy is Skip, saving network calls and time on large playlists
+- Batch UI improvements: Moved primary download action button to the top above playlist items, added a sticky scroll pill, and compacted playlist item cards (8-10 items per screen)
+- Downloads screen compact layout: Scaled thumbnails and card heights to fit 5-6 active download progress cards simultaneously
+- UI refinement: Cleaned up platform badge styling with neutral white brand tags across Preview and Downloads screens
