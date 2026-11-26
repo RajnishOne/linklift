@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -127,18 +128,19 @@ internal fun PlatformBadge(
 @Composable
 internal fun NeonCard(
     modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp),
+    contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
+        shape = shape,
         color = LinkLiftCard.copy(alpha = 0.92f),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
         shadowElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier
-                .padding(20.dp),
+            modifier = Modifier.padding(contentPadding),
             content = content,
         )
     }
@@ -235,10 +237,16 @@ internal fun InfoChip(
     accentColor: Color? = null,
     icon: ImageVector? = null,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
+    val hPad = if (compact) 8.dp else 12.dp
+    val vPad = if (compact) 5.dp else 10.dp
+    val corner = if (compact) 12.dp else 20.dp
+    val iconSize = if (compact) 13.dp else 15.dp
+
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(corner),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
@@ -246,8 +254,8 @@ internal fun InfoChip(
         ),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.padding(horizontal = hPad, vertical = vPad),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 1.dp else 2.dp),
         ) {
             Text(
                 text = value,
@@ -256,19 +264,19 @@ internal fun InfoChip(
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 5.dp),
             ) {
                 if (icon != null) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
                         tint = accentColor ?: Color.White,
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(iconSize),
                     )
                 }
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.labelLarge,
+                    style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
                     color = accentColor ?: Color.White,
                     fontWeight = if (accentColor != null) FontWeight.SemiBold else FontWeight.Medium,
                 )

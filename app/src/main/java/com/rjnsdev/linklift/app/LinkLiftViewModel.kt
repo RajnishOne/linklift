@@ -737,6 +737,32 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
                 return@launch
             }
 
+            val cleanSubfolder = MergeDownloadService.sanitizeSubfolder(currentTarget)
+            val conflictPolicy = uiState.value.settings.fileConflictBehavior
+            val existingUri = findExistingMediaFile(appContext, resolved.fileName, cleanSubfolder)
+            if (existingUri != null) {
+                when (conflictPolicy) {
+                    FileConflictBehavior.Skip -> {
+                        showToast("Skipped ${resolved.fileName} (already exists)")
+                        _uiState.update {
+                            it.copy(
+                                currentScreen = AppScreen.Downloads,
+                                message = "Skipped: ${resolved.fileName} already exists in $downloadLoc",
+                                targetSubfolder = it.settings.downloadSubfolder,
+                                isFromShare = false,
+                            )
+                        }
+                        return@launch
+                    }
+                    FileConflictBehavior.Overwrite -> {
+                        deleteDownloadedPhysicalFile(appContext, existingUri.toString())
+                    }
+                    FileConflictBehavior.Rename -> {
+                        // Let DownloadManager append (1)
+                    }
+                }
+            }
+
             runCatching {
                 enqueuePreviewItems(
                     manager = manager,
@@ -797,6 +823,31 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
         val jobId = "merge-${System.currentTimeMillis()}-${(0..9999).random()}"
         val effectiveSubfolder = subfolder ?: uiState.value.targetSubfolder.takeIf { it.isNotBlank() } ?: uiState.value.settings.downloadSubfolder
         val downloadLoc = defaultDownloadLocation(effectiveSubfolder)
+
+        val conflictPolicy = uiState.value.settings.fileConflictBehavior
+        val existingUri = findExistingMediaFile(appContext, outputFileName, effectiveSubfolder)
+        if (existingUri != null) {
+            when (conflictPolicy) {
+                FileConflictBehavior.Skip -> {
+                    showToast("Skipped $outputFileName (already exists)")
+                    _uiState.update {
+                        it.copy(
+                            currentScreen = AppScreen.Downloads,
+                            message = "Skipped: $outputFileName already exists in $downloadLoc",
+                            targetSubfolder = it.settings.downloadSubfolder,
+                            isFromShare = false,
+                        )
+                    }
+                    return
+                }
+                FileConflictBehavior.Overwrite -> {
+                    deleteDownloadedPhysicalFile(appContext, existingUri.toString())
+                }
+                FileConflictBehavior.Rename -> {
+                    // Let MediaStore / download service append (1)
+                }
+            }
+        }
 
         val formatLabel = if (isMp3Requested) "MP3 audio" else format.label
         val videoUrl = if (format.isAudioOnly) "" else format.mediaUrl
@@ -1177,98 +1228,168 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
             }
 
             var succeeded = 0
+            var skipped = 0
             var failed = 0
             try {
                 selectedEntries.forEachIndexed { index, entry ->
                     ensureActive()
-                _uiState.update { current ->
-                    val existing = current.batchProgress ?: BatchProgress(
-                        total = selectedEntries.size,
-                        processed = 0,
-                        succeeded = 0,
-                        failed = 0,
-                    )
-                    current.copy(
-                        batchProgress = existing.copy(
-                            currentTitle = entry.title,
-                        ),
-                    )
-                }
+                    val conflictPolicy = uiState.value.settings.fileConflictBehavior
 
-                val previewResult = runCatching {
-                    if (isInstagramHost(entry.sourceUrl)) {
-                        inspectInstagramLink(url = entry.sourceUrl)
-                    } else {
-                        resolveWithPythonOrFallback(entry.sourceUrl)
+                    // 1. Pre-check: skip resolution & download immediately if file already exists in target subfolder
+                    if (conflictPolicy == FileConflictBehavior.Skip) {
+                        val existingPreUri = findExistingBatchEntryFile(
+                            context = appContext,
+                            title = entry.title,
+                            sourceUrl = entry.sourceUrl,
+                            isAudioOnly = uiState.value.batchAudioOnly,
+                            subfolder = batchFolder,
+                        )
+                        if (existingPreUri != null) {
+                            skipped++
+                            succeeded++
+                            _uiState.update { current ->
+                                val existing = current.batchProgress ?: BatchProgress(
+                                    total = selectedEntries.size,
+                                    processed = 0,
+                                    succeeded = 0,
+                                    failed = 0,
+                                )
+                                current.copy(
+                                    batchProgress = existing.copy(
+                                        processed = index + 1,
+                                        succeeded = succeeded,
+                                        failed = failed,
+                                        currentTitle = "${entry.title} (already exists, skipped)",
+                                    ),
+                                )
+                            }
+                            return@forEachIndexed
+                        }
                     }
-                }.getOrNull()
-                ensureActive()
 
-                val enqueueOk = previewResult?.let { preview ->
-                    val primary = preview.items.firstOrNull() ?: return@let null
-                    val preset = if (uiState.value.batchAudioOnly) {
-                        uiState.value.settings.preferredQuality
-                    } else {
-                        uiState.value.batchQualityPreset
-                            ?: uiState.value.settings.preferredQuality.takeIf { it != QualityPreset.AskEveryTime }
-                            ?: QualityPreset.BestQuality
+                    _uiState.update { current ->
+                        val existing = current.batchProgress ?: BatchProgress(
+                            total = selectedEntries.size,
+                            processed = 0,
+                            succeeded = 0,
+                            failed = 0,
+                        )
+                        current.copy(
+                            batchProgress = existing.copy(
+                                currentTitle = entry.title,
+                            ),
+                        )
                     }
-                    val videoPref = uiState.value.settings.preferredVideoFormat
-                    val audioPref = uiState.value.settings.preferredAudioFormat
-                    val preferAudioOnly = uiState.value.batchAudioOnly
-                    val chosen = chooseFormatForPreset(
-                        formats = primary.formats,
-                        preset = preset,
-                        videoPref = videoPref,
-                        audioPref = audioPref,
-                        preferAudioOnly = preferAudioOnly,
-                    )
-                    val useMergeService = chosen != null && shouldDownloadWithMergeService(
-                        format = chosen,
-                        sourceUrl = entry.sourceUrl,
-                        audioPref = audioPref,
-                    )
-                    if (useMergeService) {
-                        runCatching {
-                            enqueueMergeJob(
-                                sourceUrl = entry.sourceUrl,
-                                item = primary,
-                                format = chosen,
-                                subfolder = batchFolder,
-                            )
-                        }.isSuccess
-                    } else {
-                        val resolved = resolveItemForDownload(primary, chosen?.formatId)
-                        runCatching {
-                            enqueuePreviewItems(
-                                manager = manager,
-                                sourceUrl = entry.sourceUrl,
-                                items = listOf(resolved),
-                                formats = listOf(chosen),
-                                subfolder = batchFolder,
-                            )
-                        }.isSuccess
+
+                    val previewResult = runCatching {
+                        if (isInstagramHost(entry.sourceUrl)) {
+                            inspectInstagramLink(url = entry.sourceUrl)
+                        } else {
+                            resolveWithPythonOrFallback(entry.sourceUrl)
+                        }
+                    }.getOrNull()
+                    ensureActive()
+
+                    val enqueueOk = previewResult?.let { preview ->
+                        val primary = preview.items.firstOrNull() ?: return@let null
+                        val preset = if (uiState.value.batchAudioOnly) {
+                            uiState.value.settings.preferredQuality
+                        } else {
+                            uiState.value.batchQualityPreset
+                                ?: uiState.value.settings.preferredQuality.takeIf { it != QualityPreset.AskEveryTime }
+                                ?: QualityPreset.BestQuality
+                        }
+                        val videoPref = uiState.value.settings.preferredVideoFormat
+                        val audioPref = uiState.value.settings.preferredAudioFormat
+                        val preferAudioOnly = uiState.value.batchAudioOnly
+                        val chosen = chooseFormatForPreset(
+                            formats = primary.formats,
+                            preset = preset,
+                            videoPref = videoPref,
+                            audioPref = audioPref,
+                            preferAudioOnly = preferAudioOnly,
+                        )
+
+                        // 2. Post-resolve check: exact output file name is known
+                        val rawTitle = primary.title.ifBlank { primary.fileName.substringBeforeLast('.', primary.fileName) }
+                        val isMp3 = preferAudioOnly && (
+                            chosen?.ext.equals("mp3", ignoreCase = true) ||
+                            audioPref == AudioFormatPreference.Mp3
+                        )
+                        val ext = if (preferAudioOnly) {
+                            if (isMp3) "mp3" else (chosen?.ext ?: "m4a")
+                        } else when {
+                            chosen?.ext.equals("webm", ignoreCase = true) -> "webm"
+                            else -> "mp4"
+                        }
+                        val mime = if (preferAudioOnly) {
+                            if (isMp3) "audio/mpeg" else (chosen?.mimeType ?: "audio/mp4")
+                        } else if (ext == "webm") "video/webm" else "video/mp4"
+
+                        val outputFileName = buildSafeFileName(rawTitle, ext, primary.resolvedUrl, mime)
+                        val existingResolvedUri = findExistingMediaFile(appContext, outputFileName, batchFolder)
+
+                        if (existingResolvedUri != null) {
+                            when (conflictPolicy) {
+                                FileConflictBehavior.Skip -> {
+                                    skipped++
+                                    return@let true // Treated as handled without enqueuing
+                                }
+                                FileConflictBehavior.Overwrite -> {
+                                    deleteDownloadedPhysicalFile(appContext, existingResolvedUri.toString())
+                                }
+                                FileConflictBehavior.Rename -> {
+                                    // Default behavior: MediaStore will append (1)
+                                }
+                            }
+                        }
+
+                        val useMergeService = chosen != null && shouldDownloadWithMergeService(
+                            format = chosen,
+                            sourceUrl = entry.sourceUrl,
+                            audioPref = audioPref,
+                        )
+                        if (useMergeService) {
+                            runCatching {
+                                enqueueMergeJob(
+                                    sourceUrl = entry.sourceUrl,
+                                    item = primary,
+                                    format = chosen,
+                                    subfolder = batchFolder,
+                                )
+                            }.isSuccess
+                        } else {
+                            val resolved = resolveItemForDownload(primary, chosen?.formatId)
+                            runCatching {
+                                enqueuePreviewItems(
+                                    manager = manager,
+                                    sourceUrl = entry.sourceUrl,
+                                    items = listOf(resolved),
+                                    formats = listOf(chosen),
+                                    subfolder = batchFolder,
+                                )
+                            }.isSuccess
+                        }
+                    } ?: false
+
+                    if (enqueueOk) succeeded++ else failed++
+
+                    _uiState.update { current ->
+                        val existing = current.batchProgress ?: BatchProgress(
+                            total = selectedEntries.size,
+                            processed = 0,
+                            succeeded = 0,
+                            failed = 0,
+                        )
+                        current.copy(
+                            batchProgress = existing.copy(
+                                processed = index + 1,
+                                succeeded = succeeded,
+                                failed = failed,
+                                currentTitle = entry.title,
+                            ),
+                        )
                     }
-                } ?: false
-
-                if (enqueueOk) succeeded++ else failed++
-
-                _uiState.update { current ->
-                    val existing = current.batchProgress ?: BatchProgress(
-                        total = selectedEntries.size,
-                        processed = 0,
-                        succeeded = 0,
-                        failed = 0,
-                    )
-                    current.copy(
-                        batchProgress = existing.copy(
-                            processed = index + 1,
-                            succeeded = succeeded,
-                            failed = failed,
-                            currentTitle = entry.title,
-                        ),
-                    )
-                }
                 }
             } catch (cancellation: CancellationException) {
                 // cancelBatchProcessing() already cleared batchProgress/batch
@@ -1278,7 +1399,9 @@ class LinkLiftViewModel(application: Application) : AndroidViewModel(application
 
             batchProcessingJob = null
             val batchMsg = buildString {
-                append("Queued $succeeded of ${selectedEntries.size}")
+                val queued = (succeeded - skipped).coerceAtLeast(0)
+                append("Queued $queued of ${selectedEntries.size}")
+                if (skipped > 0) append(" • $skipped skipped (already exist)")
                 if (failed > 0) append(" • $failed failed")
                 append(" • Saved to $batchLocation")
             }
