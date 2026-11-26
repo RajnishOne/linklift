@@ -43,9 +43,31 @@ object CookieHelper {
         return if (file.exists() && file.length() > 0) file.absolutePath else null
     }
 
+    private val AUTH_COOKIE_NAMES = setOf(
+        "LOGIN_INFO",
+        "SID",
+        "__Secure-1PSID",
+        "__Secure-3PSID",
+        "SAPISID",
+        "__Secure-3PAPISID",
+        "SSID",
+    )
+
     fun hasValidCookies(context: Context): Boolean {
         val file = getCookieFile(context)
-        return file.exists() && file.length() > 0
+        if (!file.exists() || file.length() == 0L) return false
+        return runCatching {
+            file.useLines { lines ->
+                lines.any { line ->
+                    if (line.startsWith("#") || line.isBlank()) return@any false
+                    val parts = line.split("\t")
+                    if (parts.size >= 6) {
+                        val name = parts[5].trim()
+                        name in AUTH_COOKIE_NAMES
+                    } else false
+                }
+            }
+        }.getOrDefault(false)
     }
 
     fun getCookiesLastModified(context: Context): Long {

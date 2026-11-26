@@ -51,3 +51,34 @@ target_link_libraries(
     linklift-mp3
     ${log-lib}
 )
+
+set(QJS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/quickjs)
+
+set(QJS_SOURCES
+    ${QJS_DIR}/dtoa.c
+    ${QJS_DIR}/libregexp.c
+    ${QJS_DIR}/libunicode.c
+    ${QJS_DIR}/quickjs.c
+    ${QJS_DIR}/quickjs-libc.c
+    ${QJS_DIR}/gen/repl.c
+    ${QJS_DIR}/gen/standalone.c
+    ${QJS_DIR}/qjs.c
+)
+
+add_executable(
+    qjs
+    ${QJS_SOURCES}
+)
+
+set_target_properties(qjs PROPERTIES
+    OUTPUT_NAME "qjs"
+    PREFIX "lib"
+    SUFFIX ".so"
+    C_STANDARD 11
+)
+
+target_compile_definitions(qjs PRIVATE _GNU_SOURCE QUICKJS_NG_BUILD)
+target_compile_options(qjs PRIVATE -funsigned-char -Wno-implicit-fallthrough -Wno-sign-compare)
+target_include_directories(qjs PRIVATE ${QJS_DIR})
+target_link_libraries(qjs PRIVATE m dl)
+

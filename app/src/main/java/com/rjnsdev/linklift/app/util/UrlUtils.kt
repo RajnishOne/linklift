@@ -131,6 +131,10 @@ internal fun normalizeBatchEntryUrl(rawUrl: String): String {
         val rel = trimmed.removePrefix("/")
         return "https://www.youtube.com/$rel"
     }
+    if (trimmed.startsWith("/live/") || trimmed.startsWith("live/")) {
+        val rel = trimmed.removePrefix("/")
+        return "https://www.youtube.com/$rel"
+    }
     return "https://www.youtube.com/watch?v=$trimmed"
 }
 
@@ -181,6 +185,9 @@ internal fun extractYouTubeVideoId(url: String): String? {
         }
         if (path.startsWith("/embed/")) {
             return path.removePrefix("/embed/").substringBefore('/').substringBefore('?')
+        }
+        if (path.startsWith("/live/")) {
+            return path.removePrefix("/live/").substringBefore('/').substringBefore('?')
         }
     }
     return null
