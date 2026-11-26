@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -158,7 +159,7 @@ internal fun DownloadsScreen(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = linkLiftListContentPadding(),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
             OutlinedTextField(
@@ -371,9 +372,11 @@ private fun DownloadDetailCard(
             selectionMode -> Modifier.clickable { onSelectionChanged(!selected) }
             canOpen -> Modifier.clickable { onOpen(download) }
             else -> Modifier
-        }
+        },
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DownloadDetailCardHeader(
                 title = download.title,
                 description = download.description,
@@ -582,21 +585,22 @@ private fun DownloadDetailCardHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        DownloadThumbnail(kind = kind, state = state, large = true)
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        DownloadThumbnail(kind = kind, state = state, large = false)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             ExpandableDescriptionText(
                 text = description,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = LinkLiftTextSecondary,
             )
         }
@@ -628,7 +632,7 @@ private fun DownloadDetailCardProgress(
     val platform = getPlatformBrand(sourceUrl)
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (platform != null) {
@@ -636,16 +640,19 @@ private fun DownloadDetailCardProgress(
                 title = platform.name,
                 value = "Platform",
                 icon = platform.icon,
+                compact = true,
             )
         }
-        InfoChip(title = downloadStateLabel(state), value = "Status")
-        InfoChip(title = formatBytes(downloadedBytes), value = "Downloaded")
-        totalBytes?.let { InfoChip(title = formatBytes(it), value = "Total") }
+        InfoChip(title = downloadStateLabel(state), value = "Status", compact = true)
+        InfoChip(title = formatBytes(downloadedBytes), value = "Downloaded", compact = true)
+        totalBytes?.let { InfoChip(title = formatBytes(it), value = "Total", compact = true) }
     }
 
     LinearProgressIndicator(
         progress = { if (state == DownloadState.Completed) 1f else progress },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(4.dp),
         color = when (state) {
             DownloadState.Completed -> LinkLiftSuccess
             DownloadState.Failed -> LinkLiftError
@@ -843,11 +850,11 @@ private fun DownloadThumbnail(
         MediaKind.Image -> Icons.Rounded.Image
         MediaKind.Unknown -> Icons.Rounded.Download
     }
-    val size = if (large) 78.dp else 64.dp
+    val size = if (large) 52.dp else 42.dp
 
     Surface(
         modifier = Modifier.size(size),
-        shape = RoundedCornerShape(if (large) 22.dp else 18.dp),
+        shape = RoundedCornerShape(if (large) 14.dp else 10.dp),
         color = Color.Transparent,
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
     ) {
@@ -869,7 +876,7 @@ private fun DownloadThumbnail(
                 imageVector = icon,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(if (large) 34.dp else 28.dp),
+                modifier = Modifier.size(if (large) 26.dp else 22.dp),
             )
         }
     }

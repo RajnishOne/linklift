@@ -316,6 +316,29 @@ internal fun findExistingMediaFile(
     return null
 }
 
+internal fun findExistingBatchEntryFile(
+    context: Context?,
+    title: String,
+    sourceUrl: String,
+    isAudioOnly: Boolean,
+    subfolder: String? = null,
+): Uri? {
+    if (title.isBlank()) return null
+    val candidateExts = if (isAudioOnly) {
+        listOf("mp3", "m4a", "opus", "webm", "aac")
+    } else {
+        listOf("mp4", "webm", "mkv")
+    }
+    for (ext in candidateExts) {
+        val candidateName = buildSafeFileName(title, ext, sourceUrl)
+        val uri = findExistingMediaFile(context, candidateName, subfolder)
+        if (uri != null) {
+            return uri
+        }
+    }
+    return null
+}
+
 internal fun deleteDownloadedPhysicalFile(context: Context?, localUri: String?): Boolean {
     if (localUri.isNullOrBlank()) return false
     var deleted = false

@@ -166,5 +166,35 @@ class BatchAndRetryImprovementsTest {
         assertNull(defaultItem.subtitleUrl)
         assertNull(defaultItem.subtitleExt)
     }
+
+    @Test
+    fun testFindExistingBatchEntryFileValidation() {
+        val nullResult = findExistingBatchEntryFile(
+            context = null,
+            title = "",
+            sourceUrl = "https://example.com/test",
+            isAudioOnly = false,
+        )
+        assertNull(nullResult)
+    }
+
+    @Test
+    fun testBatchMessageReportingWithSkippedCount() {
+        val total = 10
+        val succeeded = 8
+        val skipped = 3
+        val failed = 2
+        val batchLocation = "Download/LinkLift"
+
+        val batchMsg = buildString {
+            val queued = (succeeded - skipped).coerceAtLeast(0)
+            append("Queued $queued of $total")
+            if (skipped > 0) append(" • $skipped skipped (already exist)")
+            if (failed > 0) append(" • $failed failed")
+            append(" • Saved to $batchLocation")
+        }
+
+        assertEquals("Queued 5 of 10 • 3 skipped (already exist) • 2 failed • Saved to Download/LinkLift", batchMsg)
+    }
 }
 

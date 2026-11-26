@@ -1,5 +1,10 @@
 package com.rjnsdev.linklift.app
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -16,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,6 +42,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rjnsdev.linklift.app.QualityPreset
 import com.rjnsdev.linklift.app.ui.BatchQualityDialog
 import com.rjnsdev.linklift.app.ui.FolderSelectionDialog
@@ -76,6 +84,7 @@ internal fun BatchScreen(
     val progress = uiState.batchProgress
     val isProcessing = progress?.isActive == true
     var showFolderDialog by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
 
     if (showFolderDialog) {
         FolderSelectionDialog(
@@ -100,315 +109,394 @@ internal fun BatchScreen(
         )
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 40.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        item {
-            NeonCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = batch.label,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = Color.White,
-                            )
-                            Text(
-                                text = batch.title,
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = Color.White,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        Icon(
-                            imageVector = when (batch.source) {
-                                BatchSource.Playlist -> Icons.Rounded.PlayCircleOutline
-                                BatchSource.BulkPaste -> Icons.Rounded.Collections
-                            },
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(34.dp),
-                        )
-                    }
-                    if (batch.uploader.isNotBlank()) {
-                        Text(
-                            text = batch.uploader,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = LinkLiftTextSecondary,
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        InfoChip(title = "${batch.returnedCount}", value = "Items shown")
-                        if (batch.totalCount > batch.returnedCount) {
-                            InfoChip(title = "${batch.totalCount}", value = "Total available")
-                        }
-                        InfoChip(title = "$selectedCount", value = "Selected")
-                    }
-                    if (batch.isTruncated) {
-                        Text(
-                            text = "Showing first ${batch.returnedCount} of ${batch.totalCount} items. Open source link to download the rest.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = LinkLiftTextSecondary,
-                        )
-                    }
-                    if (batch.entries.size > BATCH_AUTO_SELECT_LIMIT) {
-                        Text(
-                            text = "Large batch. Nothing selected by default. Check the items you want to download.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = LinkLiftTextSecondary,
-                        )
-                    }
-                }
-            }
-        }
+    val destinationPath = if (uiState.targetSubfolder.isBlank()) {
+        "Download/LinkLift"
+    } else {
+        "Download/LinkLift/${uiState.targetSubfolder}"
+    }
 
-        if (progress != null) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 14.dp, top = 14.dp, end = 14.dp, bottom = if (selectedCount > 0) 84.dp else 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             item {
-                NeonCard {
+                NeonCard(contentPadding = PaddingValues(14.dp), shape = RoundedCornerShape(18.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = if (isProcessing) "Resolving links..." else "Batch complete",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White,
-                        )
-                        LinearProgressIndicator(
-                            progress = {
-                                if (progress.total <= 0) 0f
-                                else (progress.processed.toFloat() / progress.total.toFloat()).coerceIn(0f, 1f)
-                            },
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            color = Color.White,
-                            trackColor = Color.White.copy(alpha = 0.08f),
-                        )
-                        Text(
-                            text = "${progress.processed} of ${progress.total} • ${progress.succeeded} queued • ${progress.failed} failed",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = LinkLiftTextSecondary,
-                        )
-                        progress.currentTitle?.takeIf { isProcessing && it.isNotBlank() }?.let { title ->
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = batch.label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White.copy(alpha = 0.8f),
+                                )
+                                Text(
+                                    text = batch.title,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Icon(
+                                imageVector = when (batch.source) {
+                                    BatchSource.Playlist -> Icons.Rounded.PlayCircleOutline
+                                    BatchSource.BulkPaste -> Icons.Rounded.Collections
+                                },
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp),
+                            )
+                        }
+                        if (batch.uploader.isNotBlank()) {
                             Text(
-                                text = title,
+                                text = batch.uploader,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = LinkLiftTextMuted,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                                color = LinkLiftTextSecondary,
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            InfoChip(title = "${batch.returnedCount}", value = "Items shown", compact = true)
+                            if (batch.totalCount > batch.returnedCount) {
+                                InfoChip(title = "${batch.totalCount}", value = "Total available", compact = true)
+                            }
+                            InfoChip(title = "$selectedCount", value = "Selected", compact = true)
+                        }
+                        if (batch.isTruncated) {
+                            Text(
+                                text = "Showing first ${batch.returnedCount} of ${batch.totalCount} items. Open source link to download the rest.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = LinkLiftTextSecondary,
+                            )
+                        }
+                        if (batch.entries.size > BATCH_AUTO_SELECT_LIMIT) {
+                            Text(
+                                text = "Large batch. Nothing selected by default. Check the items you want to download.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = LinkLiftTextSecondary,
                             )
                         }
                     }
                 }
             }
-        }
 
-        item {
-            NeonCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Format",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = LinkLiftTextSecondary,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        val isAudio = uiState.batchAudioOnly
-                        val videoSubtitle = when {
-                            uiState.batchQualityPreset != null -> uiState.batchQualityPreset.label
-                            uiState.settings.preferredQuality == QualityPreset.AskEveryTime -> "Ask every time (tap to set)"
-                            else -> uiState.settings.preferredQuality.label
+            if (progress != null) {
+                item {
+                    NeonCard(contentPadding = PaddingValues(14.dp), shape = RoundedCornerShape(18.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = if (isProcessing) "Resolving links..." else "Batch complete",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                            )
+                            LinearProgressIndicator(
+                                progress = {
+                                    if (progress.total <= 0) 0f
+                                    else (progress.processed.toFloat() / progress.total.toFloat()).coerceIn(0f, 1f)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.08f),
+                            )
+                            Text(
+                                text = "${progress.processed} of ${progress.total} • ${progress.succeeded} queued • ${progress.failed} failed",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = LinkLiftTextSecondary,
+                            )
+                            progress.currentTitle?.takeIf { isProcessing && it.isNotBlank() }?.let { title ->
+                                Text(
+                                    text = title,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = LinkLiftTextMuted,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
+                    }
+                }
+            }
 
-                        // Video option
-                        Surface(
-                            onClick = {
-                                if (!isProcessing) {
-                                    if (isAudio) {
-                                        onAudioOnlyToggled(false)
-                                    } else {
-                                        onOpenQualityDialog()
+            item {
+                NeonCard(contentPadding = PaddingValues(12.dp), shape = RoundedCornerShape(18.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Format",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = LinkLiftTextSecondary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val isAudio = uiState.batchAudioOnly
+                            val videoSubtitle = when {
+                                uiState.batchQualityPreset != null -> uiState.batchQualityPreset.label
+                                uiState.settings.preferredQuality == QualityPreset.AskEveryTime -> "Ask every time (tap to set)"
+                                else -> uiState.settings.preferredQuality.label
+                            }
+
+                            // Video option
+                            Surface(
+                                onClick = {
+                                    if (!isProcessing) {
+                                        if (isAudio) {
+                                            onAudioOnlyToggled(false)
+                                        } else {
+                                            onOpenQualityDialog()
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (!isAudio) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (!isAudio) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Videocam,
+                                        contentDescription = "Video",
+                                        tint = if (!isAudio) Color.White else LinkLiftTextSecondary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Video",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = if (!isAudio) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (!isAudio) Color.White else LinkLiftTextSecondary,
+                                        )
+                                        Text(
+                                            text = videoSubtitle,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = LinkLiftTextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    if (!isAudio) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Tune,
+                                            contentDescription = "Change quality",
+                                            tint = Color.White.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(16.dp),
+                                        )
                                     }
                                 }
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (!isAudio) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (!isAudio) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                            ),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            }
+
+                            // Audio option
+                            Surface(
+                                onClick = { if (!isProcessing) onAudioOnlyToggled(true) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isAudio) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isAudio) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                                ),
                             ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Videocam,
-                                    contentDescription = "Video",
-                                    tint = if (!isAudio) Color.White else LinkLiftTextSecondary,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Video",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = if (!isAudio) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (!isAudio) Color.White else LinkLiftTextSecondary,
-                                    )
-                                    Text(
-                                        text = videoSubtitle,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = LinkLiftTextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                if (!isAudio) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Rounded.Tune,
-                                        contentDescription = "Change quality",
-                                        tint = Color.White.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(18.dp),
+                                        imageVector = Icons.Rounded.Audiotrack,
+                                        contentDescription = "Audio only",
+                                        tint = if (isAudio) Color.White else LinkLiftTextSecondary,
+                                        modifier = Modifier.size(20.dp),
                                     )
-                                }
-                            }
-                        }
-
-                        // Audio option
-                        Surface(
-                            onClick = { if (!isProcessing) onAudioOnlyToggled(true) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(14.dp),
-                            color = if (isAudio) Color.White.copy(alpha = 0.15f) else LinkLiftCard.copy(alpha = 0.6f),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isAudio) Color.White else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                            ),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Audiotrack,
-                                    contentDescription = "Audio only",
-                                    tint = if (isAudio) Color.White else LinkLiftTextSecondary,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Audio only",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = if (isAudio) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isAudio) Color.White else LinkLiftTextSecondary,
-                                    )
-                                    Text(
-                                        text = uiState.settings.preferredAudioFormat.label,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = LinkLiftTextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Audio only",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = if (isAudio) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isAudio) Color.White else LinkLiftTextSecondary,
+                                        )
+                                        Text(
+                                            text = uiState.settings.preferredAudioFormat.label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = LinkLiftTextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
 
-        item {
-            NeonCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        TextButton(
-                            onClick = onSelectAll,
-                            enabled = !isProcessing && selectedCount < batch.entries.size,
-                        ) {
-                            Text("Select all")
-                        }
-                        TextButton(
-                            onClick = onClear,
+            // PRIMARY ACTIONS MOVED TO TOP!
+            item {
+                NeonCard(contentPadding = PaddingValues(12.dp), shape = RoundedCornerShape(18.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = onDownload,
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(vertical = 12.dp),
                             enabled = !isProcessing && selectedCount > 0,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color(0xFF0F0F0F),
+                                disabledContainerColor = Color.White.copy(alpha = 0.12f),
+                                disabledContentColor = LinkLiftTextMuted,
+                            ),
+                            shape = RoundedCornerShape(14.dp),
                         ) {
-                            Text("Clear")
+                            Icon(
+                                imageVector = if (uiState.batchAudioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.CloudDownload,
+                                contentDescription = null,
+                                tint = if (!isProcessing && selectedCount > 0) Color(0xFF0F0F0F) else LinkLiftTextMuted,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isProcessing) {
+                                    "Queuing downloads..."
+                                } else if (selectedCount > 0) {
+                                    val kindLabel = if (uiState.batchAudioOnly) "audio" else "item"
+                                    "Download $selectedCount $kindLabel${if (selectedCount == 1) "" else "s"}"
+                                } else {
+                                    "Select items to download"
+                                },
+                                color = if (!isProcessing && selectedCount > 0) Color(0xFF0F0F0F) else LinkLiftTextMuted,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
-                        TextButton(
-                            onClick = onCancel,
+
+                        DownloadDestinationChip(
+                            destinationPath = destinationPath,
+                            onClick = { if (!isProcessing) showFolderDialog = true },
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(if (isProcessing) "Stop batch" else "Cancel")
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(
+                                    onClick = onSelectAll,
+                                    enabled = !isProcessing && selectedCount < batch.entries.size,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                ) {
+                                    Text("Select all (${batch.entries.size})", style = MaterialTheme.typography.labelMedium)
+                                }
+                                TextButton(
+                                    onClick = onClear,
+                                    enabled = !isProcessing && selectedCount > 0,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                ) {
+                                    Text("Clear", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                            TextButton(
+                                onClick = onCancel,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            ) {
+                                Text(if (isProcessing) "Stop batch" else "Cancel", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
                     }
                 }
             }
-        }
 
-        itemsIndexed(batch.entries) { index, entry ->
-            BatchEntryRow(
-                entry = entry,
-                isChecked = index in selected,
-                isProcessing = isProcessing,
-                onCheckedChange = { onToggleEntry(index) },
-            )
-        }
-
-        item {
-            val destinationPath = if (uiState.targetSubfolder.isBlank()) {
-                "Download/LinkLift"
-            } else {
-                "Download/LinkLift/${uiState.targetSubfolder}"
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Entries (${batch.entries.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = LinkLiftTextSecondary,
+                    )
+                    Text(
+                        text = "$selectedCount selected",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.7f),
+                    )
+                }
             }
-            DownloadDestinationChip(
-                destinationPath = destinationPath,
-                onClick = { if (!isProcessing) showFolderDialog = true },
-            )
+
+            itemsIndexed(batch.entries) { index, entry ->
+                BatchEntryRow(
+                    entry = entry,
+                    isChecked = index in selected,
+                    isProcessing = isProcessing,
+                    onCheckedChange = { onToggleEntry(index) },
+                )
+            }
         }
 
-        item {
-            Button(
-                onClick = onDownload,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                enabled = !isProcessing && selectedCount > 0,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color(0xFF0F0F0F),
-                    disabledContainerColor = Color.White.copy(alpha = 0.12f),
-                    disabledContentColor = LinkLiftTextMuted,
-                ),
+        // Sticky bottom download pill when scrolled past top controls
+        val showStickyBar = remember {
+            derivedStateOf {
+                listState.firstVisibleItemIndex > 3 && selectedCount > 0 && !isProcessing
+            }
+        }
+        AnimatedVisibility(
+            visible = showStickyBar.value,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF1E1E1E),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
+                shadowElevation = 8.dp,
             ) {
-                Icon(
-                    imageVector = if (uiState.batchAudioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.CloudDownload,
-                    contentDescription = null,
-                    tint = if (!isProcessing && selectedCount > 0) Color(0xFF0F0F0F) else LinkLiftTextMuted,
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (isProcessing) {
-                        "Queuing downloads..."
-                    } else if (selectedCount > 0) {
-                        val kindLabel = if (uiState.batchAudioOnly) "audio" else "item"
-                        "Download $selectedCount $kindLabel${if (selectedCount == 1) "" else "s"}"
-                    } else {
-                        "Select items to download"
-                    },
-                    color = if (!isProcessing && selectedCount > 0) Color(0xFF0F0F0F) else LinkLiftTextMuted,
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                Button(
+                    onClick = onDownload,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF0F0F0F),
+                    ),
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp),
+                ) {
+                    Icon(
+                        imageVector = if (uiState.batchAudioOnly) Icons.Rounded.Audiotrack else Icons.Rounded.CloudDownload,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    val kindLabel = if (uiState.batchAudioOnly) "audio" else "item"
+                    Text(
+                        text = "Download $selectedCount $kindLabel${if (selectedCount == 1) "" else "s"}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
     }
@@ -423,32 +511,36 @@ private fun BatchEntryRow(
 ) {
     NeonCard(
         modifier = if (isProcessing) Modifier else Modifier.clickable { onCheckedChange(!isChecked) },
+        shape = RoundedCornerShape(14.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp),
     ) {
         val platform = getPlatformBrand(entry.sourceUrl, entry.host)
         val brandColor = platform?.color ?: Color.White
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Surface(
-                modifier = Modifier.size(48.dp),
-                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.size(36.dp),
+                shape = RoundedCornerShape(10.dp),
                 color = brandColor.copy(alpha = 0.16f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, brandColor.copy(alpha = 0.45f)),
+                border = BorderStroke(1.dp, brandColor.copy(alpha = 0.45f)),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = platform?.icon ?: Icons.Rounded.PlayCircleOutline,
                         contentDescription = null,
                         tint = brandColor,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = entry.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -461,7 +553,7 @@ private fun BatchEntryRow(
                 if (metaLine.isNotBlank()) {
                     Text(
                         text = metaLine,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = LinkLiftTextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -469,7 +561,7 @@ private fun BatchEntryRow(
                 }
                 Text(
                     text = entry.sourceUrl,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                     color = LinkLiftTextMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -479,6 +571,7 @@ private fun BatchEntryRow(
                 checked = isChecked,
                 onCheckedChange = onCheckedChange,
                 enabled = !isProcessing,
+                modifier = Modifier.size(24.dp),
                 colors = CheckboxDefaults.colors(
                     checkedColor = Color.White,
                     checkmarkColor = Color(0xFF0F0F0F),

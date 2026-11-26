@@ -14,7 +14,7 @@ internal fun isLargeFont(): Boolean =
     LocalConfiguration.current.fontScale >= LargeFontScaleThreshold
 
 internal fun linkLiftListContentPadding(): PaddingValues =
-    PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 16.dp)
+    PaddingValues(start = 14.dp, top = 14.dp, end = 14.dp, bottom = 16.dp)
 
 /** Keeps compact chip/pill labels at a stable size while body text still scales. */
 @Composable
