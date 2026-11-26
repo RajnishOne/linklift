@@ -164,7 +164,6 @@ internal fun PreviewScreen(
                             InfoChip(
                                 title = platform.name,
                                 value = "Platform",
-                                accentColor = platform.color,
                                 icon = platform.icon,
                             )
                         } else {

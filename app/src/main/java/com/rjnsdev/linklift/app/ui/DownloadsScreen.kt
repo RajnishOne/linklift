@@ -635,7 +635,6 @@ private fun DownloadDetailCardProgress(
             InfoChip(
                 title = platform.name,
                 value = "Platform",
-                accentColor = platform.color,
                 icon = platform.icon,
             )
         }
@@ -818,7 +817,6 @@ private fun DownloadedFileViewer(
                                 InfoChip(
                                     title = platform.name,
                                     value = "Platform",
-                                    accentColor = platform.color,
                                     icon = platform.icon,
                                 )
                             }
