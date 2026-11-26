@@ -13,12 +13,52 @@ _YTDLP_VERSION = tuple(
 )
 _YTDLP_ANDROID_VR_BROKEN = _YTDLP_VERSION >= (2026, 8, 17)
 
+# For authenticated sessions, clients must support cookies ('SUPPORTS_COOKIES' in yt-dlp).
+# Clients such as android, ios, and visionos do not support cookies.
+_DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["web", "mweb", "tv"]
+
 if _YTDLP_ANDROID_VR_BROKEN:
     _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["visionos", "web", "android"]
-    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["visionos", "android", "ios", "mweb", "web"]
 else:
     _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["android_vr", "android"]
-    _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["visionos", "android", "ios", "mweb", "web"]
+
+_QJS_EXECUTABLE = None
+
+
+def _find_quickjs_executable():
+    """Locate the bundled QuickJS binary (libqjs.so or qjs) on Android or host."""
+    # 1. On Android via Chaquopy Application Context nativeLibraryDir
+    try:
+        from com.chaquo.python import Python
+        platform = Python.getPlatform()
+        if platform:
+            app = platform.getApplication()
+            if app:
+                native_dir = str(app.getApplicationInfo().nativeLibraryDir)
+                for name in ("libqjs.so", "qjs"):
+                    candidate = os.path.join(native_dir, name)
+                    if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+                        return candidate
+    except Exception:
+        pass
+
+    # 2. Check LD_LIBRARY_PATH environment variable
+    ld_paths = os.environ.get("LD_LIBRARY_PATH", "").split(":")
+    for directory in ld_paths:
+        if directory:
+            for name in ("libqjs.so", "qjs"):
+                candidate = os.path.join(directory, name)
+                if os.path.exists(candidate) and os.access(candidate, os.X_OK):
+                    return candidate
+
+    # 3. Check system PATH or common paths (for local unit tests / host execution)
+    import shutil
+    for name in ("libqjs.so", "qjs"):
+        found = shutil.which(name)
+        if found:
+            return found
+
+    return None
 
 _YT_DLP_BASE_OPTIONS = {
     "quiet": True,
@@ -51,6 +91,12 @@ def _ydl_options(cookie_file_path=None, **overrides):
         options["cookiefile"] = cookie_file_path
         if "youtube" in options["extractor_args"]:
             options["extractor_args"]["youtube"]["player_client"] = _DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED
+
+    global _QJS_EXECUTABLE
+    if _QJS_EXECUTABLE is None:
+        _QJS_EXECUTABLE = _find_quickjs_executable()
+    if _QJS_EXECUTABLE:
+        options["js_runtimes"] = {"quickjs": {"path": _QJS_EXECUTABLE}}
 
     options.update(overrides)
     return options
@@ -678,12 +724,14 @@ def resolve_url(url, cookie_file_path=None):
             ["web", "tv_simply"] if _YTDLP_ANDROID_VR_BROKEN
             else ["android_vr", "web"]
         )
-        fallback_options = dict(options)
-        fallback_options["extractor_args"] = {
-            "youtube": {
-                "player_client": _fallback_clients,
-            }
-        }
+        fallback_options = _ydl_options(
+            cookie_file_path=cookie_file_path,
+            noplaylist=True,
+            extract_flat=False,
+            playlistend=1,
+        )
+        if "youtube" in fallback_options.get("extractor_args", {}):
+            fallback_options["extractor_args"]["youtube"]["player_client"] = _fallback_clients
         try:
             with YoutubeDL(fallback_options) as ydl:
                 info = ydl.extract_info(url, download=False)

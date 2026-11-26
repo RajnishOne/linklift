@@ -103,6 +103,11 @@ android {
         buildConfig = true
         compose = true
     }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 
@@ -124,6 +129,7 @@ chaquopy {
         pip {
             install("instaloader")
             install("yt-dlp")
+            install("yt-dlp-ejs")
         }
     }
 }
