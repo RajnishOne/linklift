@@ -15,7 +15,9 @@ _YTDLP_ANDROID_VR_BROKEN = _YTDLP_VERSION >= (2026, 8, 17)
 
 # For authenticated sessions, clients must support cookies ('SUPPORTS_COOKIES' in yt-dlp).
 # Clients such as android, ios, and visionos do not support cookies.
-_DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["web", "mweb", "tv"]
+# 'web_creator' and 'web_embedded' provide full adaptive video (up to 1440p/4k) and audio formats
+# without mobile web (mweb) SABR-only stream throttling. 'web' and 'mweb' are kept as fallbacks.
+_DEFAULT_YOUTUBE_CLIENTS_AUTHENTICATED = ["web_creator", "web_embedded", "web", "mweb"]
 
 if _YTDLP_ANDROID_VR_BROKEN:
     _DEFAULT_YOUTUBE_CLIENTS_ANONYMOUS = ["visionos", "web", "android"]
@@ -97,6 +99,14 @@ def _ydl_options(cookie_file_path=None, **overrides):
         _QJS_EXECUTABLE = _find_quickjs_executable()
     if _QJS_EXECUTABLE:
         options["js_runtimes"] = {"quickjs": {"path": _QJS_EXECUTABLE}}
+    else:
+        # Fallback for host development / testing environments where QuickJS is not in PATH
+        import shutil
+        for runtime in ("node", "deno", "bun"):
+            found = shutil.which(runtime)
+            if found:
+                options["js_runtimes"] = {runtime: {"path": found}}
+                break
 
     options.update(overrides)
     return options
@@ -721,8 +731,11 @@ def resolve_url(url, cookie_file_path=None):
     if not info and is_youtube:
         # Fallback: try the secondary client list
         _fallback_clients = (
-            ["web", "tv_simply"] if _YTDLP_ANDROID_VR_BROKEN
-            else ["android_vr", "web"]
+            ["web_embedded", "web", "mweb"] if has_valid_cookies
+            else (
+                ["web", "tv_simply"] if _YTDLP_ANDROID_VR_BROKEN
+                else ["android_vr", "web"]
+            )
         )
         fallback_options = _ydl_options(
             cookie_file_path=cookie_file_path,
