@@ -41,21 +41,25 @@ class YouTubeLiveAgeRestrictedVerificationTest {
     @Test
     fun testCookieValidation() {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        CookieHelper.clearCookies(appContext)
-        assertFalse(CookieHelper.hasValidCookies(appContext))
+        try {
+            CookieHelper.clearCookies(appContext)
+            assertFalse(CookieHelper.hasValidCookies(appContext))
 
-        // Guest-only cookies (false positive before our fix)
-        val guestCookies = """
-            # Netscape HTTP Cookie File
-            .youtube.com	TRUE	/	TRUE	1811266097	VISITOR_INFO1_LIVE	kO-SjU88UiU
-            .youtube.com	TRUE	/	TRUE	0	YSC	AkEfp0gcpe4
-        """.trimIndent()
-        CookieHelper.importFromText(appContext, guestCookies).getOrThrow()
-        assertFalse(CookieHelper.hasValidCookies(appContext))
+            // Guest-only cookies (false positive before our fix)
+            val guestCookies = """
+                # Netscape HTTP Cookie File
+                .youtube.com	TRUE	/	TRUE	1811266097	VISITOR_INFO1_LIVE	kO-SjU88UiU
+                .youtube.com	TRUE	/	TRUE	0	YSC	AkEfp0gcpe4
+            """.trimIndent()
+            CookieHelper.importFromText(appContext, guestCookies).getOrThrow()
+            assertFalse(CookieHelper.hasValidCookies(appContext))
 
-        // Auth cookies with session keys
-        CookieHelper.importFromText(appContext, dummyAuthCookies).getOrThrow()
-        assertTrue(CookieHelper.hasValidCookies(appContext))
+            // Auth cookies with session keys
+            CookieHelper.importFromText(appContext, dummyAuthCookies).getOrThrow()
+            assertTrue(CookieHelper.hasValidCookies(appContext))
+        } finally {
+            CookieHelper.clearCookies(appContext)
+        }
     }
 
     @Test
