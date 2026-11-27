@@ -1,0 +1,2 @@
+- YouTube 1440p & 4K extraction: Added authenticated web_creator and web_embedded player clients, resolving mobile web (mweb) SABR-only stream throttling and restoring full adaptive video qualities (1440p, 4K) and audio streams for authenticated sessions
+- Test suite & runtime improvements: Enhanced test cookie isolation and added development JS runtime fallback detection

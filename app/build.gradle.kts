@@ -48,8 +48,8 @@ android {
         applicationId = "com.rjnsdev.linklift.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 35
-        versionName = "2.25"
+        versionCode = 36
+        versionName = "2.26"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
